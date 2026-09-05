@@ -140,6 +140,11 @@ The installer copies modular source files into:
 
 `~/.bashrc` is only a loader. Edit the repository copies and rerun `install.sh --configs-only` to keep maintenance reproducible.
 
+Copying rather than symlinking is deliberate. The bootstrap repository commonly
+lives on Android shared storage, where Unix symlink/mode semantics are not a
+reliable contract. Bootstrap-owned configuration is copied into private storage;
+symlinks are used only when both ends live inside the normal private filesystem.
+
 ### Termux role
 
 Termux receives the broader native CLI/toolchain set from the original setup: Git/OpenSSH, Node LTS, Python, clang/CMake/Ninja, Neovim, micro, tmux, modern shell tools, and a tuned extra-key row.
@@ -151,6 +156,84 @@ Use it for:
 - lightweight native Node/Python work
 - Android-facing helpers
 - longer low-overhead sessions where booting AVF is unnecessary
+
+## Optional Termux recipes
+
+Recipes are **Termux-only Android/CLI integrations**. They are not a second
+workload system for AVF: general development environments belong in Podman/OCI
+containers there.
+
+Base bootstrap installs **no recipes**. The Termux setup only refreshes a small recipe catalog
+into private storage and installs the `recipe` command:
+
+```bash
+recipe list
+recipe info vnote
+recipe install vnote
+recipe check vnote
+recipe remove vnote
+```
+
+The ownership boundary is intentionally narrow:
+
+- a recipe may declare Termux package dependencies; `recipe install` installs
+  only packages that are missing;
+- packages are **dependencies, not recipe-owned state** and are never removed
+  automatically; package cleanup is manual because dependencies may be shared
+  by other recipes or by the user;
+- recipe source from the bootstrap catalog is copied into
+  `~/.local/share/pixel-dev-bootstrap/recipes/<name>/`;
+- commands are then linked from that private copy into `~/bin`;
+- optional shell integration is a separate
+  `~/.config/pixel-dev-bootstrap/recipes.d/<name>.bash` include, never an inline
+  append to `~/.bashrc`;
+- recipe removal deletes only those recipe-owned private files and links.
+
+This copy-first model is deliberate. The public/bootstrap copy may live under
+Android shared storage; installed recipe payloads do not execute from or depend
+on shared-storage symlink behavior.
+
+Rerunning `install.sh --configs-only` refreshes the private **catalog only**. It
+does not mutate an installed recipe. Run `recipe install <name>` again when you
+explicitly want to update that recipe from the refreshed catalog.
+
+### `vnote` recipe
+
+`vnote` is the first example: a small voice-to-Markdown bridge that uses Android
+speech-to-text through Termux:API and can optionally fall back to local
+`whisper-cli` transcription.
+
+```bash
+recipe install vnote
+vnote
+```
+
+The recipe ensures `termux-api` and `ffmpeg`. The matching **Termux:API Android
+companion app must still be installed from the same signing source as Termux**.
+The recipe deliberately does not install a Whisper engine or model.
+
+```bash
+vnote       # Android STT first; local fallback max 120 seconds
+vnote 30    # local fallback max 30 seconds
+vnote 0     # no fallback ceiling; Enter stops recording
+```
+
+Notes default to:
+
+```text
+${DEV_SHARED:-$HOME/scratch}/voice-scratchpad.md
+```
+
+Useful overrides:
+
+```bash
+export VNOTE_NOTES_FILE="$DEV_SHARED/voice-scratchpad.md"
+export VNOTE_MAX_SECONDS=120
+export VNOTE_MODEL="$HOME/models/ggml-tiny.en.bin"
+export VNOTE_MODE=auto     # auto | native | local
+```
+
+See [`recipes/vnote/README.md`](recipes/vnote/README.md).
 
 ### AVF Debian role
 
@@ -280,7 +363,7 @@ clippaste
 
 Backends are selected at runtime:
 
-- **Termux:** `termux-clipboard-set/get`; requires both the `termux-api` package and the matching Termux:API Android companion app.
+- **Termux:** `termux-clipboard-set/get`; requires both the `termux-api` package and the matching Termux:API Android companion app. Base does not install `termux-api`; install it manually or through a recipe such as `vnote`.
 - **AVF Display / Wayland:** `wl-copy` and `wl-paste` from `wl-clipboard`.
 - **AVF Display / X11:** `xclip`.
 
@@ -349,3 +432,13 @@ shared storage does not survive device loss or wipe.
 
 Pull workload images as needed. The VM should remain cheap to abuse, reset, and
 reconstruct.
+
+For Termux, optional Android integrations are deliberately reconstructed after
+the base rather than baked into it:
+
+```bash
+recipe install vnote     # only when this capability is wanted
+```
+
+A user-owned extension may choose to install personal recipes automatically,
+but upstream bootstrap does not.

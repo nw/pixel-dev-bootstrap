@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.4 — optional Termux recipes and vnote
+
+- Add a deliberately small Termux-only recipe layer for Android/CLI integrations.
+- Keep base bootstrap recipe-free; refresh only a private recipe catalog and the `recipe` helper.
+- Add `recipe list/info/install/check/remove` with idempotent package dependency checks.
+- Define package ownership explicitly: recipes may install missing dependencies but never uninstall packages.
+- Copy recipe payloads into Termux-private storage before wiring `~/bin` or `recipes.d/*.bash` private-to-private symlinks.
+- Add a stable `recipes.d` shell include seam instead of allowing recipes to append into `~/.bashrc`.
+- Move `termux-api` out of the base Termux package set; Android API integration is now opt-in.
+- Add the `vnote` recipe: Android speech-to-text first, optional local `whisper-cli` fallback, Enter-or-time-ceiling recording, and Markdown output.
+- Expand README guidance around copy semantics, recipe scope, shared dependencies, and AVF/Podman separation.
+
 ## 0.1.3 — base profile and optional runtime shortcuts
 
 - Make the AVF shell runtime-neutral by default: `pm`, `pms`, and `pmlan` remain core.

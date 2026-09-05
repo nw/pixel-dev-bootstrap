@@ -8,4 +8,17 @@ PIXEL_SHELL_ROOT="$HOME/.config/pixel-dev-bootstrap/shell"
 [[ -r "$PIXEL_SHELL_ROOT/podman.bash" ]] && . "$PIXEL_SHELL_ROOT/podman.bash"
 [[ -r "$PIXEL_SHELL_ROOT/boxes.bash" ]] && . "$PIXEL_SHELL_ROOT/boxes.bash"
 
-unset PIXEL_SHELL_ROOT
+# Optional recipes never append into ~/.bashrc. A recipe that needs shell
+# integration gets one isolated include under recipes.d/.
+PIXEL_RECIPE_SHELL_ROOT="$HOME/.config/pixel-dev-bootstrap/recipes.d"
+if [[ "${PIXEL_PLATFORM:-}" == "termux" && -d "$PIXEL_RECIPE_SHELL_ROOT" ]]; then
+  PIXEL_RECIPE_HAD_NULLGLOB=0
+  shopt -q nullglob && PIXEL_RECIPE_HAD_NULLGLOB=1
+  shopt -s nullglob
+  for PIXEL_RECIPE_SHELL_FILE in "$PIXEL_RECIPE_SHELL_ROOT"/*.bash; do
+    [[ -r "$PIXEL_RECIPE_SHELL_FILE" ]] && . "$PIXEL_RECIPE_SHELL_FILE"
+  done
+  ((PIXEL_RECIPE_HAD_NULLGLOB)) || shopt -u nullglob
+fi
+
+unset PIXEL_RECIPE_HAD_NULLGLOB PIXEL_RECIPE_SHELL_FILE PIXEL_RECIPE_SHELL_ROOT PIXEL_SHELL_ROOT

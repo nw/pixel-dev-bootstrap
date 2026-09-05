@@ -65,7 +65,10 @@ install_file "$BOOTSTRAP_ROOT/config/nvim/init.lua" "$HOME/.config/nvim/init.lua
 install_file "$BOOTSTRAP_ROOT/config/tmux/tmux.conf" "$HOME/.tmux.conf" 0644
 
 if [[ "$BOOTSTRAP_PLATFORM" == "termux" ]]; then
-  mkdir -p "$HOME/.termux"
+  mkdir -p \
+    "$HOME/.termux" \
+    "$HOME/.local/share/pixel-dev-bootstrap/recipes" \
+    "$HOME/.config/pixel-dev-bootstrap/recipes.d"
   install_file "$BOOTSTRAP_ROOT/config/termux/termux.properties" \
     "$HOME/.termux/termux.properties" 0644
 fi
@@ -74,8 +77,26 @@ say "Installing helper commands"
 local_bin_source="$BOOTSTRAP_ROOT/bin"
 for helper in "$local_bin_source"/*; do
   [[ -f "$helper" ]] || continue
-  install_file "$helper" "$HOME/bin/$(basename -- "$helper")" 0755
+  helper_name="$(basename -- "$helper")"
+  if [[ "$helper_name" == "recipe" && "$BOOTSTRAP_PLATFORM" != "termux" ]]; then
+    rm -f -- "$HOME/bin/recipe"
+    continue
+  fi
+  install_file "$helper" "$HOME/bin/$helper_name" 0755
 done
+unset helper_name
+
+# The recipe catalog is a read-only bootstrap-owned copy. Recipes themselves are
+# not installed during bootstrap. Copying the catalog into private storage keeps
+# recipe discovery independent of sdcardfs/shared-storage execution semantics.
+if [[ "$BOOTSTRAP_PLATFORM" == "termux" && -d "$BOOTSTRAP_ROOT/recipes" ]]; then
+  say "Refreshing optional Termux recipe catalog"
+  recipe_catalog="$HOME/.local/share/pixel-dev-bootstrap/recipe-catalog"
+  rm -rf -- "$recipe_catalog"
+  mkdir -p -- "$recipe_catalog"
+  cp -a -- "$BOOTSTRAP_ROOT/recipes/." "$recipe_catalog/"
+  info "Catalog: $recipe_catalog"
+fi
 
 # Debian intentionally ships these commands under collision-safe binary names.
 # Normalize them into ~/bin so shared shell config can use the conventional names.

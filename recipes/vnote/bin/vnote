@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: vnote [max-seconds]
+
+Capture a voice note into Markdown.
+
+Default flow:
+  1. Try Android speech-to-text through Termux:API.
+  2. If no text is returned, optionally fall back to local audio + whisper-cli.
+
+Local fallback recording stops when Enter is pressed or max-seconds expires.
+Use 0 for no time limit.
+
+Environment:
+  VNOTE_NOTES_FILE   Markdown destination
+  VNOTE_MAX_SECONDS  fallback recording ceiling (default: 120)
+  VNOTE_MODEL        whisper.cpp model path
+  VNOTE_MODE         auto (default), native, or local
+USAGE
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+esac
+
+MAX_SECONDS="${1:-${VNOTE_MAX_SECONDS:-120}}"
+[[ "$MAX_SECONDS" =~ ^[0-9]+$ ]] || { echo "vnote: max-seconds must be a non-negative integer" >&2; exit 2; }
+
+MODE="${VNOTE_MODE:-auto}"
+case "$MODE" in
+  auto|native|local) ;;
+  *) echo "vnote: VNOTE_MODE must be auto, native, or local" >&2; exit 2 ;;
+esac
+
+NOTES_FILE="${VNOTE_NOTES_FILE:-${DEV_SHARED:-$HOME/scratch}/voice-scratchpad.md}"
+MODEL="${VNOTE_MODEL:-$HOME/models/ggml-tiny.en.bin}"
+TMP_ROOT="${TMPDIR:-${PREFIX:-$HOME}/tmp}"
+TMP_BASE="$TMP_ROOT/vnote-$$-$(date +%s)"
+AUDIO_FILE="${TMP_BASE}.m4a"
+WAV_FILE="${TMP_BASE}.wav"
+TEXT_FILE="${TMP_BASE}.txt"
+RECORDING=0
+
+mkdir -p -- "$(dirname -- "$NOTES_FILE")" "$TMP_ROOT"
+
+append_note() {
+  local text="$1"
+  [[ -n "$text" ]] || return 1
+  printf '\n--- Voice Note [%s] ---\n%s\n' \
+    "$(date '+%Y-%m-%d %H:%M:%S')" \
+    "$text" >> "$NOTES_FILE"
+}
+
+cleanup() {
+  if ((RECORDING)); then
+    termux-microphone-record -q >/dev/null 2>&1 || true
+  fi
+  rm -f -- "$AUDIO_FILE" "$WAV_FILE" "$TEXT_FILE"
+}
+trap cleanup EXIT INT TERM
+
+if [[ "$MODE" != "local" ]]; then
+  if ! command -v termux-speech-to-text >/dev/null 2>&1; then
+    [[ "$MODE" == "native" ]] && {
+      echo "vnote: termux-speech-to-text is unavailable. Install the vnote recipe dependencies and Termux:API app." >&2
+      exit 1
+    }
+  else
+    RAW_TEXT="$(termux-speech-to-text 2>/dev/null || true)"
+    if [[ -n "$RAW_TEXT" ]]; then
+      append_note "$RAW_TEXT"
+      printf 'Recorded: "%s"\n' "$RAW_TEXT"
+      exit 0
+    fi
+    [[ "$MODE" == "native" ]] && exit 1
+  fi
+fi
+
+for command_name in termux-microphone-record ffmpeg whisper-cli; do
+  command -v "$command_name" >/dev/null 2>&1 || {
+    echo "vnote: local fallback requires '$command_name' on PATH." >&2
+    [[ "$command_name" == "whisper-cli" ]] && \
+      echo "       vnote intentionally does not install a Whisper engine or model." >&2
+    exit 1
+  }
+done
+[[ -f "$MODEL" ]] || {
+  echo "vnote: local Whisper model not found: $MODEL" >&2
+  echo "       Set VNOTE_MODEL to a compatible whisper.cpp model." >&2
+  exit 1
+}
+
+if ((MAX_SECONDS == 0)); then
+  echo "Recording local fallback. Press Enter to stop (no time ceiling)."
+else
+  echo "Recording local fallback. Press Enter to stop (max ${MAX_SECONDS}s)."
+fi
+termux-microphone-record \
+  -f "$AUDIO_FILE" \
+  -l "$MAX_SECONDS" \
+  -e aac \
+  -r 16000 \
+  -c 1 >/dev/null
+RECORDING=1
+
+if ((MAX_SECONDS == 0)); then
+  read -r || true
+else
+  read -r -t "$MAX_SECONDS" || true
+fi
+
+termux-microphone-record -q >/dev/null 2>&1 || true
+RECORDING=0
+
+ffmpeg -hide_banner -loglevel error -y \
+  -i "$AUDIO_FILE" \
+  -ar 16000 \
+  -ac 1 \
+  "$WAV_FILE"
+
+whisper-cli \
+  -m "$MODEL" \
+  -f "$WAV_FILE" \
+  -otxt \
+  -of "$TMP_BASE" >/dev/null 2>&1
+
+[[ -s "$TEXT_FILE" ]] || { echo "vnote: transcription produced no text" >&2; exit 1; }
+append_note "$(cat -- "$TEXT_FILE")"
+printf 'Voice note appended to: %s\n' "$NOTES_FILE"

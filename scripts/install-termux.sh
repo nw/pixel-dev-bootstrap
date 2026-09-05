@@ -38,7 +38,6 @@ if [[ "$BOOTSTRAP_CONFIGS_ONLY" != "1" ]]; then
     gh
     shellcheck
     shfmt
-    termux-api
     age
   )
 
@@ -95,8 +94,8 @@ Next:
   source ~/.bashrc
   dev-doctor
 
-Clipboard integration:
-  The termux-api command package was installed on a best-effort basis.
-  Android clipboard access also requires the matching Termux:API companion app
-  from the same distribution/signing source as Termux.
+Optional Android integration:
+  Base does not install Termux:API. Install a recipe that needs it (for example
+  `recipe install vnote`) or install `termux-api` manually. The matching
+  Termux:API Android companion app must come from the same signing source.
 EOF_DONE

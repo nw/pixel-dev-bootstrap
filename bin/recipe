@@ -1,0 +1,297 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CATALOG="${PIXEL_RECIPE_CATALOG:-$HOME/.local/share/pixel-dev-bootstrap/recipe-catalog}"
+INSTALL_ROOT="${PIXEL_RECIPE_INSTALL_ROOT:-$HOME/.local/share/pixel-dev-bootstrap/recipes}"
+SHELL_ROOT="${PIXEL_RECIPE_SHELL_ROOT:-$HOME/.config/pixel-dev-bootstrap/recipes.d}"
+BIN_ROOT="${PIXEL_RECIPE_BIN_ROOT:-$HOME/bin}"
+
+usage() {
+  cat <<'USAGE'
+Usage: recipe <command> [name]
+
+Termux-only optional Android/CLI integration recipes.
+
+Commands:
+  list             List available recipes
+  info <name>      Show a recipe README
+  install <name>   Install/update a recipe and ensure its Termux packages
+  check <name>     Check installed recipe dependencies/integration
+  remove <name>    Remove only recipe-owned files and links
+
+Package removal is deliberately manual. Recipes may share dependencies and do
+not own packages installed through pkg.
+USAGE
+}
+
+say()  { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
+info() { printf '    %s\n' "$*"; }
+warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
+die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+
+require_termux() {
+  if [[ -z "${TERMUX_VERSION:-}" && "${PREFIX:-}" != */com.termux/files/usr ]]; then
+    die "Recipes are Termux-only. Use Podman/OCI workloads for AVF Debian."
+  fi
+  command -v pkg >/dev/null 2>&1 || die "Termux pkg command not found"
+}
+
+valid_name() {
+  [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]]
+}
+
+recipe_source() {
+  local name="$1"
+  valid_name "$name" || die "Invalid recipe name: $name"
+  local source="$CATALOG/$name"
+  [[ -f "$source/recipe.sh" ]] || die "Recipe not found: $name"
+  printf '%s\n' "$source"
+}
+
+recipe_installed_source() {
+  local name="$1"
+  local source="$INSTALL_ROOT/$name"
+  [[ -f "$source/recipe.sh" ]] || return 1
+  printf '%s\n' "$source"
+}
+
+reset_recipe_contract() {
+  unset recipe_name recipe_description recipe_packages
+  unset -f recipe_check 2>/dev/null || true
+}
+
+load_recipe() {
+  local source="$1"
+  reset_recipe_contract
+  recipe_packages=()
+  # shellcheck disable=SC1090
+  source "$source/recipe.sh"
+  [[ -n "${recipe_name:-}" ]] || die "Recipe metadata missing recipe_name: $source"
+  recipe_description="${recipe_description:-}"
+}
+
+pkg_ensure() {
+  require_termux
+  local -a missing=()
+  local package
+  for package in "$@"; do
+    dpkg -s "$package" >/dev/null 2>&1 || missing+=("$package")
+  done
+  if ((${#missing[@]})); then
+    say "Installing recipe package dependencies"
+    pkg install -y "${missing[@]}"
+  else
+    info "Package dependencies already satisfied"
+  fi
+}
+
+link_owned_file() {
+  local source="$1" target="$2" old_root="${3:-}"
+
+  if [[ -e "$target" || -L "$target" ]]; then
+    if [[ -L "$target" ]]; then
+      local current
+      current="$(readlink -f -- "$target" 2>/dev/null || true)"
+      if [[ -n "$old_root" && "$current" == "$old_root"/* ]]; then
+        : # A prior version of this recipe owns the link; replacement is safe.
+      elif [[ "$current" == "$source" ]]; then
+        return 0
+      else
+        die "Refusing to replace existing link not owned by this recipe: $target"
+      fi
+    else
+      die "Refusing to replace existing file not owned by this recipe: $target"
+    fi
+  fi
+
+  mkdir -p -- "$(dirname -- "$target")"
+  ln -sfn -- "$source" "$target"
+}
+
+unlink_recipe_links() {
+  local installed="$1"
+  [[ -d "$installed" ]] || return 0
+
+  local source target current
+  if [[ -d "$installed/bin" ]]; then
+    for source in "$installed/bin"/*; do
+      [[ -f "$source" ]] || continue
+      target="$BIN_ROOT/$(basename -- "$source")"
+      if [[ -L "$target" ]]; then
+        current="$(readlink -f -- "$target" 2>/dev/null || true)"
+        [[ "$current" == "$installed"/* ]] && rm -f -- "$target"
+      fi
+    done
+  fi
+
+  target="$SHELL_ROOT/$(basename -- "$installed").bash"
+  if [[ -L "$target" ]]; then
+    current="$(readlink -f -- "$target" 2>/dev/null || true)"
+    [[ "$current" == "$installed"/* ]] && rm -f -- "$target"
+  fi
+}
+
+list_recipes() {
+  [[ -d "$CATALOG" ]] || die "Recipe catalog not found. Rerun bootstrap configs: $CATALOG"
+  local source name marker
+  for source in "$CATALOG"/*; do
+    [[ -f "$source/recipe.sh" ]] || continue
+    name="$(basename -- "$source")"
+    load_recipe "$source"
+    marker=" "
+    [[ -f "$INSTALL_ROOT/$name/recipe.sh" ]] && marker="*"
+    printf '%s %-16s %s\n' "$marker" "$name" "$recipe_description"
+  done
+  printf '\n* installed\n'
+}
+
+info_recipe() {
+  local source
+  source="$(recipe_source "$1")"
+  if [[ -r "$source/README.md" ]]; then
+    cat "$source/README.md"
+  else
+    load_recipe "$source"
+    printf '%s - %s\n' "$recipe_name" "$recipe_description"
+  fi
+}
+
+install_recipe() {
+  require_termux
+  local name="$1" source installed old_root=""
+  source="$(recipe_source "$name")"
+  load_recipe "$source"
+  [[ "$recipe_name" == "$name" ]] || die "Recipe directory/name mismatch: $name != $recipe_name"
+
+  installed="$INSTALL_ROOT/$name"
+  [[ -d "$installed" ]] && old_root="$installed"
+
+  # Preflight links before replacing an installed payload.
+  local file target current
+  if [[ -d "$source/bin" ]]; then
+    for file in "$source/bin"/*; do
+      [[ -f "$file" ]] || continue
+      target="$BIN_ROOT/$(basename -- "$file")"
+      if [[ -e "$target" || -L "$target" ]]; then
+        if [[ -L "$target" ]]; then
+          current="$(readlink -f -- "$target" 2>/dev/null || true)"
+          [[ -n "$old_root" && "$current" == "$old_root"/* ]] || \
+            die "Refusing to replace existing link not owned by recipe '$name': $target"
+        else
+          die "Refusing to replace existing file not owned by recipe '$name': $target"
+        fi
+      fi
+    done
+  fi
+  if [[ -f "$source/shell.bash" ]]; then
+    target="$SHELL_ROOT/$name.bash"
+    if [[ -e "$target" || -L "$target" ]]; then
+      if [[ -L "$target" ]]; then
+        current="$(readlink -f -- "$target" 2>/dev/null || true)"
+        [[ -n "$old_root" && "$current" == "$old_root"/* ]] || \
+          die "Refusing to replace existing shell include not owned by recipe '$name': $target"
+      else
+        die "Refusing to replace existing shell include not owned by recipe '$name': $target"
+      fi
+    fi
+  fi
+
+  # Dependency installation happens only after file/link ownership preflight, so
+  # a local naming conflict does not cause package changes as a side effect.
+  if declare -p recipe_packages >/dev/null 2>&1 && ((${#recipe_packages[@]})); then
+    pkg_ensure "${recipe_packages[@]}"
+  fi
+
+  unlink_recipe_links "$installed"
+  rm -rf -- "$installed"
+  mkdir -p -- "$INSTALL_ROOT"
+  cp -a -- "$source" "$installed"
+
+  # Recipes are copied into Termux-private storage first. Only private-to-private
+  # symlinks are used for command and shell integration; shared storage is never
+  # a symlink target.
+  if [[ -d "$installed/bin" ]]; then
+    for file in "$installed/bin"/*; do
+      [[ -f "$file" ]] || continue
+      chmod 0755 "$file"
+      link_owned_file "$file" "$BIN_ROOT/$(basename -- "$file")" "$old_root"
+    done
+  fi
+
+  if [[ -f "$installed/shell.bash" ]]; then
+    mkdir -p -- "$SHELL_ROOT"
+    link_owned_file "$installed/shell.bash" "$SHELL_ROOT/$name.bash" "$old_root"
+  fi
+
+  say "Recipe installed: $name"
+  info "Payload: $installed"
+  info "Packages are dependencies, not recipe-owned state; removal is manual."
+}
+
+check_recipe() {
+  require_termux
+  local name="$1" source
+  if source="$(recipe_installed_source "$name")"; then
+    :
+  else
+    source="$(recipe_source "$name")"
+    warn "Recipe is not installed; checking catalog definition"
+  fi
+  load_recipe "$source"
+
+  local status=0 package
+  if declare -p recipe_packages >/dev/null 2>&1; then
+    for package in "${recipe_packages[@]}"; do
+      if dpkg -s "$package" >/dev/null 2>&1; then
+        printf 'ok       package %s\n' "$package"
+      else
+        printf 'missing  package %s\n' "$package"
+        status=1
+      fi
+    done
+  fi
+
+  if declare -F recipe_check >/dev/null 2>&1; then
+    recipe_check || status=1
+  fi
+  return "$status"
+}
+
+remove_recipe() {
+  require_termux
+  local name="$1" installed="$INSTALL_ROOT/$1"
+  valid_name "$name" || die "Invalid recipe name: $name"
+  [[ -d "$installed" ]] || { info "Recipe is not installed: $name"; return 0; }
+
+  unlink_recipe_links "$installed"
+  rm -rf -- "$installed"
+  say "Recipe removed: $name"
+  info "Termux packages were intentionally left installed. Remove them manually only if no longer needed."
+}
+
+(($#)) || { usage; exit 2; }
+command_name="$1"
+shift
+
+case "$command_name" in
+  list)
+    (($# == 0)) || { usage >&2; exit 2; }
+    list_recipes
+    ;;
+  info|install|check|remove)
+    (($# == 1)) || { usage >&2; exit 2; }
+    case "$command_name" in
+      info) info_recipe "$1" ;;
+      install) install_recipe "$1" ;;
+      check) check_recipe "$1" ;;
+      remove) remove_recipe "$1" ;;
+    esac
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac
