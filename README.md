@@ -97,6 +97,8 @@ The installer auto-detects the environment. Shared storage may not preserve exec
 --no-ssh-key      do not generate ~/.ssh/id_ed25519
 --restore-ssh-key restore an age-encrypted SSH key from shared configs
 --no-podman       AVF only: skip Podman and subordinate-ID setup
+--base            base profile (default; no image-specific box helpers)
+--with-boxes      AVF only: add nodebox/pybox/debbox shorthand
 --configs-only    update dotfiles/helpers without package or system changes
 ```
 
@@ -105,6 +107,7 @@ Examples:
 ```bash
 bash install.sh --configs-only
 bash install.sh --avf --no-upgrade
+bash install.sh --avf --with-boxes
 ```
 
 Changed configuration files are backed up under:
@@ -151,7 +154,7 @@ Use it for:
 
 ### AVF Debian role
 
-The AVF host stays intentionally smaller. It gets normal shell/editor/network tools plus rootless Podman support, but **does not install Node or project-specific runtimes on the host**.
+The AVF host stays intentionally smaller. It gets normal shell/editor/network tools plus rootless Podman support, but **does not install Node or project-specific runtimes on the host**. The default shell layer is likewise runtime-neutral: `pm`, `pms`, and `pmlan` are the only container workflow abstractions enabled by default.
 
 Use it for:
 
@@ -238,7 +241,16 @@ PM_BIND_ADDRESS=0.0.0.0 pm node:24-bookworm . 3000
 pms node:24-bookworm . 3000
 ```
 
-Common images have shorter helpers:
+The base profile stops there. It deliberately does not choose language/runtime
+images for you.
+
+If repeated use establishes a real pattern, opt into a tiny convenience layer:
+
+```bash
+bash install.sh --avf --configs-only --with-boxes
+```
+
+That adds:
 
 ```bash
 nodebox . 3000                    # node:24-bookworm
@@ -246,9 +258,16 @@ pybox .                           # python:3.13-bookworm
 debbox .                          # debian:bookworm
 ```
 
-The functions use `--userns=keep-id`, bind the selected directory at `/work`, and default published ports to loopback.
+Those helpers live in a separate `boxes.bash` file and can be removed cleanly by
+rerunning `bash install.sh --avf --configs-only --base`. They do not pull images
+until invoked.
 
-If these helpers accumulate persistent homes, initialization hooks, exported GUI apps, special mounts, and environment-specific state, that is the signal to promote the pattern to Distrobox rather than continuing to grow `pm`.
+The Podman functions use `--userns=keep-id`, bind the selected directory at
+`/work`, and default published ports to loopback.
+
+If a runtime helper grows persistent homes, initialization hooks, exported GUI
+apps, special mounts, or environment-specific state, that is the signal to
+promote the pattern to Distrobox rather than continuing to grow shell shorthand.
 
 ## Clipboard
 

@@ -135,3 +135,25 @@ a canonical copy elsewhere if the list matters after device loss.
 ```bash
 reseed
 ```
+
+## Base vs image-specific helpers
+
+The default bootstrap profile is deliberately runtime-neutral. It installs the
+Podman substrate and the generic `pm`, `pms`, and `pmlan` helpers, but does not
+choose Node, Python, Debian, or other workload images on your behalf.
+
+If a recurring interactive pattern makes the shorthand useful, opt in with:
+
+```bash
+bash /mnt/shared/dev/pixel-dev-bootstrap/install.sh --avf --configs-only --with-boxes
+```
+
+Return to the base profile with:
+
+```bash
+bash /mnt/shared/dev/pixel-dev-bootstrap/install.sh --avf --configs-only --base
+```
+
+The base profile is the architectural contract. Image-specific shortcuts are a
+replaceable convenience layer.
+

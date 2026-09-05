@@ -5,6 +5,7 @@ set -Eeuo pipefail
 : "${BOOTSTRAP_PLATFORM:?BOOTSTRAP_PLATFORM is required}"
 : "${BOOTSTRAP_GENERATE_SSH_KEY:=1}"
 : "${BOOTSTRAP_RESTORE_SSH_KEY:=0}"
+: "${BOOTSTRAP_INSTALL_BOXES:=0}"
 
 # shellcheck source=./lib.sh
 source "$BOOTSTRAP_ROOT/scripts/lib.sh"
@@ -39,13 +40,24 @@ if [[ "$BOOTSTRAP_PLATFORM" == "avf" ]]; then
   install_file "$BOOTSTRAP_ROOT/config/bash/podman.bash" \
     "$HOME/.config/pixel-dev-bootstrap/shell/podman.bash" 0644
 
+  if [[ "$BOOTSTRAP_INSTALL_BOXES" == "1" ]]; then
+    install_file "$BOOTSTRAP_ROOT/config/bash/boxes.bash" \
+      "$HOME/.config/pixel-dev-bootstrap/shell/boxes.bash" 0644
+  else
+    # Base is intentionally the default. Remove stale optional helpers so a
+    # previous --with-boxes run does not silently survive a return to base.
+    rm -f -- "$HOME/.config/pixel-dev-bootstrap/shell/boxes.bash"
+  fi
+
   mkdir -p "$HOME/.config/containers"
   install_file "$BOOTSTRAP_ROOT/config/containers/containers.conf" \
     "$HOME/.config/containers/containers.conf" 0644
   install_file "$BOOTSTRAP_ROOT/config/containers/storage.conf" \
     "$HOME/.config/containers/storage.conf" 0644
 else
-  rm -f -- "$HOME/.config/pixel-dev-bootstrap/shell/podman.bash"
+  rm -f -- \
+    "$HOME/.config/pixel-dev-bootstrap/shell/podman.bash" \
+    "$HOME/.config/pixel-dev-bootstrap/shell/boxes.bash"
 fi
 
 say "Installing editor and terminal configuration"

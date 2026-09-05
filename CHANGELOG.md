@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3 — base profile and optional runtime shortcuts
+
+- Make the AVF shell runtime-neutral by default: `pm`, `pms`, and `pmlan` remain core.
+- Move `nodebox`, `pybox`, and `debbox` into an optional `boxes.bash` convenience layer.
+- Add explicit `--base` and `--with-boxes` install switches; base is the default.
+- Returning to `--base` removes stale optional box helpers from prior installs.
+- Clarify that image-specific shorthand is a replaceable convenience layer, not part of the bootstrap contract.
+- Extend smoke coverage for opt-in/opt-out profile behavior.
+
 ## 0.1.2 — recovery loop and shell correctness
 
 - Fix `pm` parsing for optional directory/port fields around `--`; add `--init`.

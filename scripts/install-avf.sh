@@ -7,6 +7,7 @@ set -Eeuo pipefail
 : "${BOOTSTRAP_GENERATE_SSH_KEY:=1}"
 : "${BOOTSTRAP_RESTORE_SSH_KEY:=0}"
 : "${BOOTSTRAP_INSTALL_PODMAN:=1}"
+: "${BOOTSTRAP_INSTALL_BOXES:=0}"
 
 # shellcheck source=./lib.sh
 source "$BOOTSTRAP_ROOT/scripts/lib.sh"
@@ -191,5 +192,6 @@ Operating model:
   Podman            disposable or named workload state
 
 The installer intentionally leaves Node and project-specific runtimes out of
-AVF's host. Use nodebox, pybox, pm, or explicit Podman commands instead.
+AVF's host. The base profile exposes pm/pms/pmlan plus explicit Podman commands.
+Use --with-boxes only if image-specific nodebox/pybox/debbox shorthand earns its place.
 EOF_DONE

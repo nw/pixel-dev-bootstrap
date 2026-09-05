@@ -135,23 +135,3 @@ pms() {
 pmlan() {
   PM_BIND_ADDRESS=0.0.0.0 pm "$@"
 }
-
-nodebox() {
-  local directory="${1:-$PWD}"
-  local port="${2:-}"
-  local tag="${3:-24-bookworm}"
-  pms "node:$tag" "$directory" "$port"
-}
-
-pybox() {
-  local directory="${1:-$PWD}"
-  local port="${2:-}"
-  local tag="${3:-3.13-bookworm}"
-  pms "python:$tag" "$directory" "$port"
-}
-
-debbox() {
-  local directory="${1:-$PWD}"
-  local tag="${2:-bookworm}"
-  pms "debian:$tag" "$directory" ""
-}

@@ -43,9 +43,19 @@ test -x "$avf_home/bin/clipcopy"
 test -x "$avf_home/bin/reseed"
 test -x "$avf_home/bin/ssh-restore"
 test -f "$avf_home/.config/pixel-dev-bootstrap/shell/podman.bash"
+test ! -e "$avf_home/.config/pixel-dev-bootstrap/shell/boxes.bash"
 grep -q 'runtime = "crun"' "$avf_home/.config/containers/containers.conf"
 grep -q 'driver = "overlay"' "$avf_home/.config/containers/storage.conf"
 grep -q 'mount_program = "/usr/bin/fuse-overlayfs"' "$avf_home/.config/containers/storage.conf"
+
+# Image-specific helpers are opt-in and cleanly removable by returning to base.
+HOME="$avf_home" USER=tester \
+  bash "$ROOT_DIR/install.sh" --avf --configs-only --no-ssh-key --no-podman --with-boxes >/dev/null
+test -f "$avf_home/.config/pixel-dev-bootstrap/shell/boxes.bash"
+grep -q '^nodebox()' "$avf_home/.config/pixel-dev-bootstrap/shell/boxes.bash"
+HOME="$avf_home" USER=tester \
+  bash "$ROOT_DIR/install.sh" --avf --configs-only --no-ssh-key --no-podman --base >/dev/null
+test ! -e "$avf_home/.config/pixel-dev-bootstrap/shell/boxes.bash"
 
 # Podman helper parser qualification. Stub podman and inspect argv.
 # shellcheck disable=SC1090
