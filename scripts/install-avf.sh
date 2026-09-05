@@ -5,6 +5,7 @@ set -Eeuo pipefail
 : "${BOOTSTRAP_UPGRADE:=1}"
 : "${BOOTSTRAP_CONFIGS_ONLY:=0}"
 : "${BOOTSTRAP_GENERATE_SSH_KEY:=1}"
+: "${BOOTSTRAP_RESTORE_SSH_KEY:=0}"
 : "${BOOTSTRAP_INSTALL_PODMAN:=1}"
 
 # shellcheck source=./lib.sh
@@ -27,7 +28,7 @@ if [[ "$BOOTSTRAP_CONFIGS_ONLY" != "1" ]]; then
   BASE_PACKAGES=(
     git openssh-client curl wget rsync ca-certificates bash-completion
     jq ripgrep fd-find fzf tmux neovim less file tree patch zip unzip tar man-db
-    bat
+    bat age
     procps iproute2 dnsutils lsof netcat-openbsd socat xdg-utils
     python3 python3-pip python3-venv
     build-essential cmake ninja-build pkg-config
@@ -68,19 +69,24 @@ if [[ "$BOOTSTRAP_CONFIGS_ONLY" != "1" ]]; then
   fi
 fi
 
-say "Creating the durable Android-visible seed layout"
+say "Creating the reset-resilient Android-visible seed layout"
 if [[ -d /mnt/shared && -w /mnt/shared ]]; then
   mkdir -p \
     /mnt/shared/dev/artifacts \
     /mnt/shared/dev/configs \
     /mnt/shared/dev/containers/compose \
     /mnt/shared/dev/exports
+  if [[ ! -e /mnt/shared/dev/configs/repos.txt ]]; then
+    cp -- "$BOOTSTRAP_ROOT/examples/repos.txt.example" /mnt/shared/dev/configs/repos.txt
+    info "Seeded /mnt/shared/dev/configs/repos.txt"
+  fi
 else
-  warn "/mnt/shared is unavailable or not writable; durable seed directories were not created"
+  warn "/mnt/shared is unavailable or not writable; reset-resilient seed directories were not created"
 fi
 
 export BOOTSTRAP_PLATFORM="avf"
 export BOOTSTRAP_GENERATE_SSH_KEY
+export BOOTSTRAP_RESTORE_SSH_KEY
 bash "$BOOTSTRAP_ROOT/scripts/setup-home.sh"
 
 has_large_subid_range() {
@@ -180,7 +186,7 @@ Next:
   dev-doctor
 
 Operating model:
-  /mnt/shared/dev   durable seed/config/artifact interchange
+  /mnt/shared/dev   reset-resilient seed/config/artifact interchange
   ~/src             disposable VM-local working trees
   Podman            disposable or named workload state
 

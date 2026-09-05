@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+force=0
+if [[ "${1:-}" == "--force" ]]; then
+  force=1
+  shift
+fi
+[[ $# -eq 0 ]] || { echo "usage: ssh-seal [--force]" >&2; exit 2; }
+
+command -v age >/dev/null 2>&1 || {
+  echo "ssh-seal: age is not installed" >&2
+  exit 127
+}
+
+key="$HOME/.ssh/id_ed25519"
+[[ -r "$key" ]] || { echo "ssh-seal: key not found: $key" >&2; exit 2; }
+
+shared="${DEV_SHARED:-}"
+if [[ -z "$shared" ]]; then
+  if [[ -d /mnt/shared/dev ]]; then shared=/mnt/shared/dev
+  elif [[ -d "$HOME/storage/shared/dev" ]]; then shared="$HOME/storage/shared/dev"
+  fi
+fi
+[[ -n "$shared" ]] || { echo "ssh-seal: DEV_SHARED is unavailable" >&2; exit 2; }
+
+target_dir="$shared/configs/ssh"
+target="$target_dir/id_ed25519.age"
+mkdir -p "$target_dir"
+
+if [[ -e "$target" && "$force" != "1" ]]; then
+  echo "ssh-seal: encrypted key already exists: $target" >&2
+  echo "rerun with --force to replace it" >&2
+  exit 2
+fi
+
+umask 077
+tmp="$(mktemp "${TMPDIR:-/tmp}/pixel-ssh-seal.XXXXXX")"
+trap 'rm -f -- "$tmp"' EXIT
+
+printf 'Encrypting %s for reset recovery. Use a strong passphrase.\n' "$key"
+age -p -o "$tmp" "$key"
+cp -- "$tmp" "$target"
+printf 'sealed    %s\n' "$target"

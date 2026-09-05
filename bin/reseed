@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -u
+
+usage() {
+  cat <<'USAGE'
+usage: reseed [repos-file]
+
+Clone repositories that are missing from $SRC (default: ~/src).
+The default manifest is $DEV_SHARED/configs/repos.txt.
+
+Manifest format: one Git URL per line. Blank lines and lines beginning with #
+are ignored. Existing destination directories are preserved and are not pulled.
+USAGE
+}
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+esac
+
+command -v git >/dev/null 2>&1 || { echo "reseed: git is not installed" >&2; exit 127; }
+
+src="${SRC:-$HOME/src}"
+shared="${DEV_SHARED:-}"
+if [[ -z "$shared" ]]; then
+  if [[ -d /mnt/shared/dev ]]; then
+    shared=/mnt/shared/dev
+  elif [[ -d "$HOME/storage/shared/dev" ]]; then
+    shared="$HOME/storage/shared/dev"
+  fi
+fi
+
+manifest="${1:-${shared:+$shared/configs/repos.txt}}"
+[[ -n "$manifest" ]] || {
+  echo "reseed: DEV_SHARED is not configured; pass a repos file explicitly" >&2
+  exit 2
+}
+[[ -r "$manifest" ]] || {
+  echo "reseed: manifest not found: $manifest" >&2
+  exit 2
+}
+
+mkdir -p "$src"
+failures=0
+
+while IFS= read -r line || [[ -n "$line" ]]; do
+  # Trim leading/trailing whitespace without interpreting the URL.
+  repo="${line#"${line%%[![:space:]]*}"}"
+  repo="${repo%"${repo##*[![:space:]]}"}"
+  [[ -z "$repo" || "$repo" == \#* ]] && continue
+
+  trimmed="${repo%/}"
+  name="${trimmed##*/}"
+  name="${name%.git}"
+  [[ -n "$name" ]] || {
+    echo "reseed: cannot derive destination from: $repo" >&2
+    failures=1
+    continue
+  }
+
+  destination="$src/$name"
+  if [[ -e "$destination" ]]; then
+    printf 'preserve  %s\n' "$destination"
+    continue
+  fi
+
+  printf 'clone     %s -> %s\n' "$repo" "$destination"
+  if ! git clone -- "$repo" "$destination"; then
+    echo "reseed: clone failed: $repo" >&2
+    failures=1
+  fi
+done < "$manifest"
+
+exit "$failures"

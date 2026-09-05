@@ -12,7 +12,7 @@ The repository installs shared shell behavior while preserving the architectural
 ```text
 Android shared storage
 └── dev/
-    ├── pixel-dev-bootstrap/    # this durable reconstruction repo
+    ├── pixel-dev-bootstrap/    # reset-resilient offline reconstruction copy
     ├── artifacts/
     ├── configs/
     ├── containers/
@@ -36,9 +36,22 @@ Treat shared storage as the **loading dock and reconstruction surface**. Keep Gi
 
 > Persist intent, source, configuration, and artifacts—not machine state.
 
+### Durability tiers
+
+`/mnt/shared` is **reset resilience**, not disaster recovery. It survives an AVF
+VM reset, but a lost, wiped, or dead phone takes it with the device. Treat:
+
+1. **Git/remotes or another external backup** as the canonical source of truth.
+2. **`/mnt/shared/dev`** as a device-local offline reconstruction cache and
+   Android ↔ Linux interchange surface.
+3. **`/home/droid`** and the Podman store as disposable machine state.
+
+This distinction is intentional: AVF rebuilds should be cheap without pretending
+shared phone storage is a complete backup strategy.
+
 ## Quick start
 
-Place or unzip this folder somewhere both environments can reach. The clean durable location is:
+Place or unzip this folder somewhere both environments can reach. The clean reset-resilient device-local location is:
 
 ```text
 Android internal storage/dev/pixel-dev-bootstrap
@@ -82,6 +95,7 @@ The installer auto-detects the environment. Shared storage may not preserve exec
 --avf             force AVF Debian
 --no-upgrade      install missing packages without a full upgrade
 --no-ssh-key      do not generate ~/.ssh/id_ed25519
+--restore-ssh-key restore an age-encrypted SSH key from shared configs
 --no-podman       AVF only: skip Podman and subordinate-ID setup
 --configs-only    update dotfiles/helpers without package or system changes
 ```
@@ -99,6 +113,9 @@ Changed configuration files are backed up under:
 ~/.local/state/pixel-dev-bootstrap/backups/<timestamp>/
 ```
 
+The newest 10 backup runs are retained by default. Override with
+`PIXEL_BOOTSTRAP_BACKUPS_KEEP=<n>` when needed.
+
 ## What gets installed
 
 ### Shared configuration
@@ -110,7 +127,7 @@ Changed configuration files are backed up under:
 - Git defaults without inventing a name or email
 - tmux baseline
 - small Neovim configuration
-- `clipcopy`, `clippaste`, and `dev-doctor`
+- `clipcopy`, `clippaste`, `dev-doctor`, and `reseed`
 
 The installer copies modular source files into:
 
@@ -163,7 +180,7 @@ sudo usermod --add-subgids 100000-165535 "$USER"
 
 It does not overwrite an existing mapping. Run `dev-doctor` to inspect the result.
 
-The installer explicitly pins the AVF rootless container substrate for reproducible rebuilds:
+The installer explicitly pins the AVF rootless container substrate for reproducible rebuilds. This is deliberate harnessing for the tested Pixel AVF environment, not an attempt to migrate an established Podman store:
 
 ```toml
 # ~/.config/containers/containers.conf
@@ -263,7 +280,31 @@ AVF key comment:    avf@pixel
 
 Private keys are never copied into `/mnt/shared` by the installer.
 
-That means an AVF reset destroys the AVF-local key—which is intentional under the disposable-VM model. Reauthorize the new key, use agent forwarding, or establish a separate secure restoration strategy when that inconvenience becomes real. Use `--no-ssh-key` to manage keys entirely yourself.
+That means an AVF reset destroys the AVF-local key by default—which is intentional under the disposable-VM model. Reauthorize the new key, use agent forwarding, or manage keys entirely yourself with `--no-ssh-key`.
+
+For a cheap opt-in recovery path, `age` is installed when available. Seal the
+current key into shared storage with a strong passphrase you retain separately:
+
+```bash
+ssh-seal
+```
+
+This writes only an encrypted blob to:
+
+```text
+$DEV_SHARED/configs/ssh/id_ed25519.age
+```
+
+After an AVF reset, reconstruct and restore in one pass:
+
+```bash
+bash /mnt/shared/dev/pixel-dev-bootstrap/install.sh --restore-ssh-key
+```
+
+The installer prompts through `age`, recreates the public key from the restored
+private key, and never stores the passphrase. This protects the key at rest on
+shared storage, but the passphrase must be strong; the encrypted blob is still
+only device-local unless separately backed up.
 
 ## Recovery cadence
 
@@ -275,4 +316,17 @@ source ~/.bashrc
 dev-doctor
 ```
 
-Then clone repos into `~/src` and pull workload images as needed. The VM should remain cheap to abuse, reset, and reconstruct.
+Then restore missing working trees from the reset-resilient manifest:
+
+```bash
+reseed
+```
+
+`reseed` reads `$DEV_SHARED/configs/repos.txt`, clones missing repositories into
+`~/src`, and preserves anything already present. The installer seeds that file
+from `examples/repos.txt.example` only when it does not already exist. Keep any
+important canonical copy of the manifest in a remote/private repository, because
+shared storage does not survive device loss or wipe.
+
+Pull workload images as needed. The VM should remain cheap to abuse, reset, and
+reconstruct.

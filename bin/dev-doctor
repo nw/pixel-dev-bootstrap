@@ -27,6 +27,7 @@ elif [[ "$platform" == "avf" ]]; then
   [[ -d /mnt/shared ]] && ok "Android shared mount: /mnt/shared" \
     || warn "/mnt/shared is unavailable"
   free -h 2>/dev/null || true
+  df -h "$HOME" 2>/dev/null || true
 fi
 
 headr "Commands"
@@ -80,6 +81,8 @@ if [[ "$platform" == "avf" ]]; then
     if podman info >/dev/null 2>&1; then
       ok "podman info succeeds"
       podman info --format 'driver={{.Store.GraphDriverName}} rootless={{.Host.Security.Rootless}}' 2>/dev/null || true
+      echo
+      podman system df 2>/dev/null || true
     else
       warn "podman is installed but podman info failed"
     fi

@@ -4,6 +4,7 @@ set -Eeuo pipefail
 : "${BOOTSTRAP_ROOT:?BOOTSTRAP_ROOT is required}"
 : "${BOOTSTRAP_PLATFORM:?BOOTSTRAP_PLATFORM is required}"
 : "${BOOTSTRAP_GENERATE_SSH_KEY:=1}"
+: "${BOOTSTRAP_RESTORE_SSH_KEY:=0}"
 
 # shellcheck source=./lib.sh
 source "$BOOTSTRAP_ROOT/scripts/lib.sh"
@@ -23,6 +24,9 @@ mkdir -p \
 chmod 700 "$HOME/.ssh"
 
 say "Installing shell configuration"
+# Deliberately copy configuration rather than symlink it. The bootstrap source
+# commonly lives on Android shared storage, where Unix symlink/mode semantics
+# are not a reliable contract.
 install_file "$BOOTSTRAP_ROOT/config/bash/bashrc" "$HOME/.bashrc" 0644
 install_file "$BOOTSTRAP_ROOT/config/bash/bash_profile" "$HOME/.bash_profile" 0644
 install_file "$BOOTSTRAP_ROOT/config/bash/inputrc" "$HOME/.inputrc" 0644
@@ -72,6 +76,14 @@ say "Configuring SSH and Git defaults"
 install_if_missing "$BOOTSTRAP_ROOT/config/ssh/config" "$HOME/.ssh/config" 0600
 
 SSH_KEY="$HOME/.ssh/id_ed25519"
+
+if [[ "$BOOTSTRAP_RESTORE_SSH_KEY" == "1" && ! -f "$SSH_KEY" ]]; then
+  say "Restoring SSH key from encrypted shared-storage recovery blob"
+  if ! "$HOME/bin/ssh-restore"; then
+    die "SSH restore was requested but failed"
+  fi
+fi
+
 if [[ "$BOOTSTRAP_GENERATE_SSH_KEY" == "1" ]]; then
   if [[ ! -f "$SSH_KEY" ]]; then
     comment="${BOOTSTRAP_PLATFORM}@pixel"
@@ -82,15 +94,23 @@ if [[ "$BOOTSTRAP_GENERATE_SSH_KEY" == "1" ]]; then
   fi
 fi
 
+git_config_default() {
+  local key="$1" value="$2"
+  git config --global --get "$key" >/dev/null 2>&1 || git config --global "$key" "$value"
+}
+
 if command -v git >/dev/null 2>&1; then
-  git config --global init.defaultBranch main
-  git config --global fetch.prune true
-  git config --global core.editor nvim
+  # Defaults are only seeded when absent. A configs-only rerun must never
+  # silently overwrite a global Git preference the user changed deliberately.
+  git_config_default init.defaultBranch main
+  git_config_default fetch.prune true
+  git_config_default core.editor nvim
   if [[ -f "${SSH_KEY}.pub" ]]; then
-    git config --global gpg.format ssh
-    git config --global user.signingkey "${SSH_KEY}.pub"
-    git config --global commit.gpgsign false
+    git_config_default gpg.format ssh
+    git_config_default user.signingkey "${SSH_KEY}.pub"
+    git_config_default commit.gpgsign false
   fi
 fi
+unset -f git_config_default 2>/dev/null || true
 
 finish_backup_notice

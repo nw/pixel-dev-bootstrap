@@ -6,6 +6,7 @@ ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLATFORM="auto"
 BOOTSTRAP_UPGRADE=1
 BOOTSTRAP_GENERATE_SSH_KEY=1
+BOOTSTRAP_RESTORE_SSH_KEY=0
 BOOTSTRAP_INSTALL_PODMAN=1
 BOOTSTRAP_CONFIGS_ONLY=0
 
@@ -21,6 +22,7 @@ Options:
   --avf             Force the AVF Debian installer
   --no-upgrade      Skip package upgrades; still installs missing packages
   --no-ssh-key      Do not generate ~/.ssh/id_ed25519 when missing
+  --restore-ssh-key Restore an age-encrypted SSH key from shared configs
   --no-podman       AVF only: skip Podman and subordinate-ID setup
   --configs-only    Install/update dotfiles and helper scripts only
   -h, --help        Show this help
@@ -33,6 +35,7 @@ while (($#)); do
     --avf) PLATFORM="avf" ;;
     --no-upgrade) BOOTSTRAP_UPGRADE=0 ;;
     --no-ssh-key) BOOTSTRAP_GENERATE_SSH_KEY=0 ;;
+    --restore-ssh-key) BOOTSTRAP_RESTORE_SSH_KEY=1 ;;
     --no-podman) BOOTSTRAP_INSTALL_PODMAN=0 ;;
     --configs-only) BOOTSTRAP_CONFIGS_ONLY=1 ;;
     -h|--help) usage; exit 0 ;;
@@ -58,6 +61,7 @@ fi
 export BOOTSTRAP_ROOT="$ROOT_DIR"
 export BOOTSTRAP_UPGRADE
 export BOOTSTRAP_GENERATE_SSH_KEY
+export BOOTSTRAP_RESTORE_SSH_KEY
 export BOOTSTRAP_INSTALL_PODMAN
 export BOOTSTRAP_CONFIGS_ONLY
 

@@ -30,6 +30,8 @@ usage: pm <image> [directory] [port] [-- command ...]
 
 Examples:
   pm node:24-bookworm
+  pm node:24-bookworm . -- npm test
+  pm node:24-bookworm -- npm test
   pm node:24-bookworm . 3000
   pm node:24-bookworm ~/src/app 8080:3000 -- npm test
   PM_BIND_ADDRESS=0.0.0.0 pm node:24-bookworm . 3000
@@ -41,6 +43,8 @@ __pm_image() {
   if [[ "$image" == */* ]]; then
     printf '%s\n' "$image"
   else
+    # Deliberately fully qualify short official images so Podman never needs
+    # to stop for a short-name resolution prompt during a quick phone session.
     printf 'docker.io/library/%s\n' "$image"
   fi
 }
@@ -64,17 +68,34 @@ pm() {
     return 127
   }
 
+  # Parse the command separator before assigning optional positional fields.
+  # This keeps all of these forms valid:
+  #   pm image
+  #   pm image -- command
+  #   pm image dir -- command
+  #   pm image dir port -- command
+  local -a positional=() command=()
+  local seen_separator=0 argument
+  for argument in "$@"; do
+    if ((seen_separator)); then
+      command+=("$argument")
+    elif [[ "$argument" == "--" ]]; then
+      seen_separator=1
+    else
+      positional+=("$argument")
+    fi
+  done
+
+  ((${#positional[@]} >= 1 && ${#positional[@]} <= 3)) || {
+    __pm_usage
+    return 2
+  }
+
   local image directory port mapping
-  image="$(__pm_image "$1")"
-  directory="${2:-$PWD}"
-  port="${3:-}"
+  image="$(__pm_image "${positional[0]}")"
+  directory="$(realpath -m -- "${positional[1]:-$PWD}")"
+  port="${positional[2]:-}"
 
-  shift || true
-  (($#)) && shift || true
-  (($#)) && shift || true
-  [[ "${1:-}" == "--" ]] && shift
-
-  directory="$(realpath -m -- "$directory")"
   [[ -d "$directory" ]] || {
     echo "pm: directory does not exist: $directory" >&2
     return 2
@@ -82,6 +103,7 @@ pm() {
 
   local -a arguments=(
     run --rm -it
+    --init
     --pull=missing
     --userns=keep-id
     --mount "type=bind,src=$directory,dst=/work"
@@ -94,8 +116,8 @@ pm() {
   [[ -n "${TERM:-}" ]] && arguments+=(--env "TERM=$TERM")
   [[ -n "${COLORTERM:-}" ]] && arguments+=(--env "COLORTERM=$COLORTERM")
 
-  if (($#)); then
-    podman "${arguments[@]}" "$image" "$@"
+  if ((${#command[@]})); then
+    podman "${arguments[@]}" "$image" "${command[@]}"
   else
     podman "${arguments[@]}" "$image"
   fi

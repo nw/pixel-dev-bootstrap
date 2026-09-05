@@ -5,6 +5,7 @@ set -Eeuo pipefail
 : "${BOOTSTRAP_UPGRADE:=1}"
 : "${BOOTSTRAP_CONFIGS_ONLY:=0}"
 : "${BOOTSTRAP_GENERATE_SSH_KEY:=1}"
+: "${BOOTSTRAP_RESTORE_SSH_KEY:=0}"
 
 # shellcheck source=./lib.sh
 source "$BOOTSTRAP_ROOT/scripts/lib.sh"
@@ -38,6 +39,7 @@ if [[ "$BOOTSTRAP_CONFIGS_ONLY" != "1" ]]; then
     shellcheck
     shfmt
     termux-api
+    age
   )
 
   say "Installing useful optional Termux packages"
@@ -62,10 +64,15 @@ if [[ -d "$HOME/storage/shared" ]]; then
     "$HOME/storage/shared/dev/configs" \
     "$HOME/storage/shared/dev/containers" \
     "$HOME/storage/shared/dev/exports"
+  if [[ ! -e "$HOME/storage/shared/dev/configs/repos.txt" ]]; then
+    cp -- "$BOOTSTRAP_ROOT/examples/repos.txt.example" "$HOME/storage/shared/dev/configs/repos.txt"
+    info "Seeded $HOME/storage/shared/dev/configs/repos.txt"
+  fi
 fi
 
 export BOOTSTRAP_PLATFORM="termux"
 export BOOTSTRAP_GENERATE_SSH_KEY
+export BOOTSTRAP_RESTORE_SSH_KEY
 bash "$BOOTSTRAP_ROOT/scripts/setup-home.sh"
 
 if command -v termux-reload-settings >/dev/null 2>&1; then

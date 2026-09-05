@@ -4,7 +4,7 @@
 
 ```text
 /mnt/shared/dev/
-  pixel-dev-bootstrap/   durable reconstruction code
+  pixel-dev-bootstrap/   reset-resilient reconstruction copy
   artifacts/             results Android should see
   configs/               non-secret portable configuration
   containers/            Containerfiles and compose definitions
@@ -19,6 +19,11 @@
 ```
 
 Assume `/home/droid` is destroyed by a VM reset. It is still the correct place for active work because it has normal Linux filesystem semantics.
+
+`/mnt/shared` survives that VM reset, but it is **not** a device-loss durability
+layer. A phone wipe, loss, or storage failure removes it too. Keep canonical
+source and important reconstruction metadata in Git/remotes or another external
+backup; use `/mnt/shared/dev` as an offline reset-resilient cache.
 
 Do not use `/mnt/shared` as the primary home for repositories, package trees, build directories, databases, or container storage. Export meaningful outputs there deliberately.
 
@@ -49,7 +54,8 @@ The bootstrap cannot change the Terminal app's VM allocation from inside Debian;
 - Do not enable persistent Podman services merely for convenience.
 - Do not enable user lingering by default; it works against the phone's battery model.
 - Deny microphone access unless a Linux application has a concrete need.
-- Keep SSH private keys and secrets in `/home/droid`, not `/mnt/shared`.
+- Keep cleartext SSH private keys and secrets in `/home/droid`, not `/mnt/shared`.
+- If reset-stable SSH identity is useful, `ssh-seal` can place an `age`-encrypted key blob under `$DEV_SHARED/configs/ssh/`; retain the passphrase separately.
 - Published container ports bind to `127.0.0.1` by default. Expose to `0.0.0.0` deliberately.
 
 ## Container-first boundary
@@ -117,3 +123,15 @@ clippaste
 ```
 
 The text Terminal activity has its own Android-native copy/paste behavior. Do not assume a graphical clipboard backend is active unless `WAYLAND_DISPLAY` or `DISPLAY` exists. `dev-doctor` reports the active backend.
+
+## Repository reseed
+
+`reseed` consumes `$DEV_SHARED/configs/repos.txt`, one Git URL per line, and
+clones only missing working trees into `~/src`. It never pulls or mutates an
+existing working tree. The manifest is seeded from `examples/repos.txt.example`
+on first setup. Treat its shared-storage copy as an offline recovery cache; keep
+a canonical copy elsewhere if the list matters after device loss.
+
+```bash
+reseed
+```

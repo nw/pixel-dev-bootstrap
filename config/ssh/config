@@ -2,3 +2,5 @@ Host *
     ServerAliveInterval 30
     ServerAliveCountMax 3
     HashKnownHosts yes
+    AddKeysToAgent yes
+    IdentitiesOnly yes

@@ -1,5 +1,7 @@
-# Keep a human-readable list of canonical repositories here.
-# Clone working trees into ~/src after a reset.
+# Repository recovery manifest consumed by `reseed`.
+# One Git URL per line. Existing directories under ~/src are preserved.
+# Keep the canonical copy in a remote/private repo if this list matters after
+# device loss; /mnt/shared only survives AVF resets, not a phone wipe/loss.
 #
 # git@github.com:example/private-project.git
 # https://github.com/example/public-project.git

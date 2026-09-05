@@ -67,11 +67,39 @@ install_if_missing() {
   install_file "$source" "$target" "$mode"
 }
 
+prune_old_backups() {
+  local keep="${PIXEL_BOOTSTRAP_BACKUPS_KEEP:-10}"
+  local root="$BOOTSTRAP_STATE_ROOT/backups"
+  [[ "$keep" =~ ^[0-9]+$ ]] || keep=10
+  [[ -d "$root" ]] || return 0
+
+  local had_nullglob=0
+  shopt -q nullglob && had_nullglob=1
+  shopt -s nullglob
+  local -a backups=("$root"/*)
+  ((had_nullglob)) || shopt -u nullglob
+
+  local -a directories=() path
+  for path in "${backups[@]}"; do
+    [[ -d "$path" ]] && directories+=("$path")
+  done
+
+  local remove_count=$((${#directories[@]} - keep))
+  ((remove_count > 0)) || return 0
+
+  local index
+  for ((index=0; index<remove_count; index++)); do
+    rm -rf -- "${directories[index]}"
+  done
+  info "Pruned $remove_count old bootstrap backup(s); keeping newest $keep"
+}
+
 finish_backup_notice() {
   if ((BOOTSTRAP_BACKUP_USED)); then
     say "Previous files were preserved"
     info "$BOOTSTRAP_BACKUP_ROOT"
   fi
+  prune_old_backups
 }
 
 install_optional_packages_apt() {

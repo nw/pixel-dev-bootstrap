@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+force=0
+if [[ "${1:-}" == "--force" ]]; then
+  force=1
+  shift
+fi
+[[ $# -eq 0 ]] || { echo "usage: ssh-restore [--force]" >&2; exit 2; }
+
+command -v age >/dev/null 2>&1 || {
+  echo "ssh-restore: age is not installed" >&2
+  exit 127
+}
+command -v ssh-keygen >/dev/null 2>&1 || {
+  echo "ssh-restore: ssh-keygen is not installed" >&2
+  exit 127
+}
+
+shared="${DEV_SHARED:-}"
+if [[ -z "$shared" ]]; then
+  if [[ -d /mnt/shared/dev ]]; then shared=/mnt/shared/dev
+  elif [[ -d "$HOME/storage/shared/dev" ]]; then shared="$HOME/storage/shared/dev"
+  fi
+fi
+[[ -n "$shared" ]] || { echo "ssh-restore: DEV_SHARED is unavailable" >&2; exit 2; }
+
+source_blob="$shared/configs/ssh/id_ed25519.age"
+key="$HOME/.ssh/id_ed25519"
+[[ -r "$source_blob" ]] || {
+  echo "ssh-restore: encrypted key not found: $source_blob" >&2
+  exit 2
+}
+
+if [[ -e "$key" && "$force" != "1" ]]; then
+  echo "ssh-restore: key already exists: $key" >&2
+  echo "rerun with --force to replace it" >&2
+  exit 2
+fi
+
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+umask 077
+tmp="$(mktemp "$HOME/.ssh/.id_ed25519.restore.XXXXXX")"
+trap 'rm -f -- "$tmp"' EXIT
+
+age -d -o "$tmp" "$source_blob"
+chmod 600 "$tmp"
+mv -f -- "$tmp" "$key"
+trap - EXIT
+ssh-keygen -y -f "$key" > "${key}.pub"
+chmod 644 "${key}.pub"
+printf 'restored  %s\n' "$key"

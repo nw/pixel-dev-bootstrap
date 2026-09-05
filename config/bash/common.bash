@@ -91,11 +91,7 @@ else
   alias l='ls -CF'
 fi
 
-if command -v bat >/dev/null 2>&1; then
-  alias cat='bat --style=plain --paging=never'
-elif command -v batcat >/dev/null 2>&1; then
-  alias cat='batcat --style=plain --paging=never'
-fi
+# Keep `cat` boring and script-compatible. `bat` is installed under its own name.
 
 if ! command -v fd >/dev/null 2>&1 && command -v fdfind >/dev/null 2>&1; then
   alias fd='fdfind'
@@ -183,3 +179,17 @@ for completion_file in \
   fi
 done
 unset completion_file
+
+# fzf packages do not wire interactive key bindings consistently across
+# Termux and Debian. Source whichever packaged integration files exist.
+if command -v fzf >/dev/null 2>&1; then
+  for fzf_file in \
+    "${PREFIX:-}/share/fzf/key-bindings.bash" \
+    "${PREFIX:-}/share/fzf/completion.bash" \
+    /usr/share/doc/fzf/examples/key-bindings.bash \
+    /usr/share/doc/fzf/examples/completion.bash \
+    /usr/share/bash-completion/completions/fzf; do
+    [[ -r "$fzf_file" ]] && . "$fzf_file"
+  done
+  unset fzf_file
+fi
