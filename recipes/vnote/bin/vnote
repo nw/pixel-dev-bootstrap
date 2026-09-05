@@ -9,9 +9,12 @@ Capture a voice note into Markdown.
 
 Default flow:
   1. Try Android speech-to-text through Termux:API.
-  2. If no text is returned, optionally fall back to local audio + whisper-cli.
+  2. If native STT is unavailable or fails, optionally fall back to local audio
+     + whisper-cli.
 
-Local fallback recording stops when Enter is pressed or max-seconds expires.
+Cancelling native STT, or completing it with no recognized speech, exits without
+recording a note. Local fallback recording stops when Enter is pressed or
+max-seconds expires.
 Use 0 for no time limit.
 
 Environment:
@@ -64,18 +67,31 @@ trap cleanup EXIT INT TERM
 
 if [[ "$MODE" != "local" ]]; then
   if ! command -v termux-speech-to-text >/dev/null 2>&1; then
-    [[ "$MODE" == "native" ]] && {
+    if [[ "$MODE" == "native" ]]; then
       echo "vnote: termux-speech-to-text is unavailable. Install the vnote recipe dependencies and Termux:API app." >&2
       exit 1
-    }
-  else
-    RAW_TEXT="$(termux-speech-to-text 2>/dev/null || true)"
-    if [[ -n "$RAW_TEXT" ]]; then
-      append_note "$RAW_TEXT"
-      printf 'Recorded: "%s"\n' "$RAW_TEXT"
-      exit 0
     fi
-    [[ "$MODE" == "native" ]] && exit 1
+    echo "vnote: Android speech-to-text is unavailable; trying local fallback." >&2
+  else
+    if RAW_TEXT="$(termux-speech-to-text 2>/dev/null)"; then
+      if [[ -n "$RAW_TEXT" ]]; then
+        append_note "$RAW_TEXT"
+        printf 'Recorded: "%s"\n' "$RAW_TEXT"
+        exit 0
+      fi
+
+      # A successful native dialog with no text represents cancellation or no
+      # recognized speech. That is a user stop, not a request for local fallback.
+      echo "vnote: no speech captured; no note recorded."
+      exit 0
+    else
+      native_status=$?
+      if [[ "$MODE" == "native" ]]; then
+        echo "vnote: Android speech-to-text failed (status $native_status)." >&2
+        exit "$native_status"
+      fi
+      echo "vnote: Android speech-to-text failed; trying local fallback." >&2
+    fi
   fi
 fi
 

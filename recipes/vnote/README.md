@@ -8,8 +8,10 @@ recipe install vnote
 vnote
 ```
 
-`vnote` first uses Android speech-to-text through Termux:API. If that returns no
-text, it can fall back to a local `whisper-cli` workflow.
+`vnote` first uses Android speech-to-text through Termux:API. If native STT is
+unavailable or fails, it can fall back to a local `whisper-cli` workflow.
+Cancelling the Android dialog, or completing it without recognized speech,
+exits cleanly without creating a note or starting local recording.
 
 ## What the recipe installs
 

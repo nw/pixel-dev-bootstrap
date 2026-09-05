@@ -174,6 +174,19 @@ recipe check vnote
 recipe remove vnote
 ```
 
+Recipe discovery is inert. `recipe list` and the metadata fallback for
+`recipe info` parse two single-line literal assignments without sourcing
+recipe code:
+
+```bash
+recipe_name="vnote"
+recipe_description="Quick voice notes through Android STT"
+```
+
+Those two assignments are a hard recipe contract. Executable `recipe.sh` code
+is sourced only for explicit `install` and `check` operations, never while
+browsing the catalog.
+
 The ownership boundary is intentionally narrow:
 
 - a recipe may declare Termux package dependencies; `recipe install` installs
@@ -191,7 +204,9 @@ The ownership boundary is intentionally narrow:
 
 This copy-first model is deliberate. The public/bootstrap copy may live under
 Android shared storage; installed recipe payloads do not execute from or depend
-on shared-storage symlink behavior.
+on shared-storage symlink behavior. Updates are staged as a complete private
+copy before the active recipe payload or links are touched, so a failed copy
+leaves the installed recipe intact.
 
 Rerunning `install.sh --configs-only` refreshes the private **catalog only**. It
 does not mutate an installed recipe. Run `recipe install <name>` again when you
@@ -201,7 +216,9 @@ explicitly want to update that recipe from the refreshed catalog.
 
 `vnote` is the first example: a small voice-to-Markdown bridge that uses Android
 speech-to-text through Termux:API and can optionally fall back to local
-`whisper-cli` transcription.
+`whisper-cli` transcription when native STT is unavailable or fails. Cancelling
+the Android dialog, or completing it without recognized speech, exits cleanly
+without starting local recording.
 
 ```bash
 recipe install vnote

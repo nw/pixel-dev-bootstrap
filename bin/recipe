@@ -55,6 +55,35 @@ recipe_installed_source() {
   printf '%s\n' "$source"
 }
 
+read_literal_metadata() {
+  local source="$1" key="$2" line raw="" value
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" =~ ^[[:space:]]*$key[[:space:]]*=[[:space:]]*(.*)$ ]]; then
+      raw="${BASH_REMATCH[1]}"
+      break
+    fi
+  done < "$source/recipe.sh"
+
+  # Metadata is deliberately constrained to one quoted literal assignment.
+  # Discovery can therefore remain inert instead of sourcing recipe code.
+  raw="${raw#"${raw%%[![:space:]]*}"}"
+  raw="${raw%"${raw##*[![:space:]]}"}"
+  [[ ${#raw} -ge 2 ]] || die "Recipe metadata missing $key: $source"
+
+  case "${raw:0:1}${raw: -1}" in
+    '""'|"''") value="${raw:1:${#raw}-2}" ;;
+    *) die "Recipe metadata $key must be a single quoted literal: $source" ;;
+  esac
+  printf '%s\n' "$value"
+}
+
+read_recipe_metadata() {
+  local source="$1"
+  recipe_name="$(read_literal_metadata "$source" recipe_name)"
+  recipe_description="$(read_literal_metadata "$source" recipe_description)"
+}
+
 reset_recipe_contract() {
   unset recipe_name recipe_description recipe_packages
   unset -f recipe_check 2>/dev/null || true
@@ -137,7 +166,9 @@ list_recipes() {
   for source in "$CATALOG"/*; do
     [[ -f "$source/recipe.sh" ]] || continue
     name="$(basename -- "$source")"
-    load_recipe "$source"
+    read_recipe_metadata "$source"
+    [[ "$recipe_name" == "$name" ]] || \
+      die "Recipe directory/name mismatch: $name != $recipe_name"
     marker=" "
     [[ -f "$INSTALL_ROOT/$name/recipe.sh" ]] && marker="*"
     printf '%s %-16s %s\n' "$marker" "$name" "$recipe_description"
@@ -151,7 +182,7 @@ info_recipe() {
   if [[ -r "$source/README.md" ]]; then
     cat "$source/README.md"
   else
-    load_recipe "$source"
+    read_recipe_metadata "$source"
     printf '%s - %s\n' "$recipe_name" "$recipe_description"
   fi
 }
@@ -196,16 +227,33 @@ install_recipe() {
     fi
   fi
 
-  # Dependency installation happens only after file/link ownership preflight, so
-  # a local naming conflict does not cause package changes as a side effect.
+  # Stage a complete private copy before changing packages, links, or the
+  # currently installed payload. A failed copy therefore leaves the working
+  # recipe untouched.
+  local staged="$INSTALL_ROOT/.${name}.new.$$"
+  mkdir -p -- "$INSTALL_ROOT"
+  rm -rf -- "$staged"
+  if ! cp -a -- "$source" "$staged"; then
+    rm -rf -- "$staged"
+    die "Failed to stage recipe payload: $name"
+  fi
+
+  # Dependency installation happens only after file/link ownership preflight
+  # and successful staging, so local conflicts or copy failures do not cause
+  # package changes as a side effect.
   if declare -p recipe_packages >/dev/null 2>&1 && ((${#recipe_packages[@]})); then
-    pkg_ensure "${recipe_packages[@]}"
+    if ! pkg_ensure "${recipe_packages[@]}"; then
+      rm -rf -- "$staged"
+      die "Failed to install package dependencies for recipe: $name"
+    fi
   fi
 
   unlink_recipe_links "$installed"
   rm -rf -- "$installed"
-  mkdir -p -- "$INSTALL_ROOT"
-  cp -a -- "$source" "$installed"
+  if ! mv -- "$staged" "$installed"; then
+    rm -rf -- "$staged"
+    die "Failed to activate staged recipe payload: $name"
+  fi
 
   # Recipes are copied into Termux-private storage first. Only private-to-private
   # symlinks are used for command and shell integration; shared storage is never

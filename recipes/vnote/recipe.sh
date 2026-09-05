@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+# Catalog discovery parses these two single-line quoted literals without
+# sourcing this file. Keep them simple and side-effect free.
 recipe_name="vnote"
 recipe_description="Quick voice notes through Android STT with an optional local Whisper fallback"
 recipe_packages=(termux-api ffmpeg)

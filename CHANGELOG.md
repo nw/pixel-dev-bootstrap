@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.5 — inert recipe discovery and safer recipe updates
+
+- Make `recipe list` and metadata-only `recipe info` inspect literal recipe
+  metadata without sourcing executable recipe code.
+- Document the two single-line quoted metadata assignments as a hard recipe
+  contract and keep catalog browsing side-effect free.
+- Stage a complete recipe payload in private storage before installing package
+  dependencies or touching the active payload and links.
+- Treat an empty successful Android speech-to-text result in `vnote` as cancel/no
+  speech, exiting cleanly instead of unexpectedly entering local Whisper mode.
+- Extend smoke coverage for inert catalog browsing, failed staged-copy recovery,
+  and native speech-dialog cancellation.
+
 ## 0.1.4 — optional Termux recipes and vnote
 
 - Add a deliberately small Termux-only recipe layer for Android/CLI integrations.
