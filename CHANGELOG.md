@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7
+
+- Added `bootstrap.sh` as a thin public one-line installer for Termux and Pixel AVF Debian.
+- The remote bootstrap creates the shared `dev/` root and canonical `pixel-dev-bootstrap` checkout before delegating to `install.sh`.
+- A clean existing checkout is updated only with `git pull --ff-only`; local modifications are preserved and suppress automatic updates.
+- The same checkout is shared as `~/storage/shared/dev/pixel-dev-bootstrap` from Termux and `/mnt/shared/dev/pixel-dev-bootstrap` from AVF.
+- Added README documentation for the one-liner, installer-argument forwarding, fork/remote override, and inspect-before-run path.
+
 ## 0.1.6 — named AVF OCI environments
 
 - Remove the `--base` / `--with-boxes` install-profile split and the old

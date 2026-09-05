@@ -7,6 +7,57 @@ One small, reproducible shell setup for both:
 
 The repository installs shared shell behavior while preserving the architectural difference between the two environments.
 
+## One-line install
+
+After publishing the repository at `github.com/nw/pixel-dev-bootstrap`, the normal first-run path is:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nw/pixel-dev-bootstrap/main/bootstrap.sh | bash
+```
+
+The remote entrypoint is intentionally thin. It:
+
+1. detects Termux or Pixel AVF Debian;
+2. enables/checks Android shared storage;
+3. creates the shared `dev/` root;
+4. installs Git only when it is missing;
+5. clones the repository into the canonical device-local path; and
+6. hands control to the repository's normal `install.sh`.
+
+The resulting checkout is the **same physical Android shared-storage directory** from both environments:
+
+```text
+Termux: ~/storage/shared/dev/pixel-dev-bootstrap
+AVF:    /mnt/shared/dev/pixel-dev-bootstrap
+```
+
+Rerunning the one-liner fast-forwards a clean existing checkout. If the checkout has local changes, bootstrap preserves them and skips the automatic update rather than overwriting work.
+
+Pass normal installer options through the one-liner with `bash -s --`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nw/pixel-dev-bootstrap/main/bootstrap.sh | \
+  bash -s -- --no-upgrade
+```
+
+For a fork or alternate remote, override the repository URL for the receiving shell:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nw/pixel-dev-bootstrap/main/bootstrap.sh | \
+  PIXEL_DEV_BOOTSTRAP_REPO=https://github.com/you/pixel-dev-bootstrap.git bash
+```
+
+To inspect before running instead of piping directly to Bash:
+
+```bash
+curl -fsSLo /tmp/pixel-dev-bootstrap.sh \
+  https://raw.githubusercontent.com/nw/pixel-dev-bootstrap/main/bootstrap.sh
+less /tmp/pixel-dev-bootstrap.sh
+bash /tmp/pixel-dev-bootstrap.sh
+```
+
+The one-line bootstrap establishes the repository and substrate only. It does not install recipes, box images, registry credentials, or project-specific workloads.
+
 ## Working model
 
 ```text

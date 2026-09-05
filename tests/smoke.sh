@@ -17,6 +17,45 @@ test_root="$(mktemp -d)"
 cleanup() { rm -rf "$termux_home" "$avf_home" "$test_root"; }
 trap cleanup EXIT
 
+printf 'Testing one-line bootstrap entrypoint...\n'
+remote_home="$test_root/remote-home"
+remote_bin="$test_root/remote-bin"
+remote_shared="$remote_home/storage/shared"
+remote_log="$test_root/remote-install.log"
+mkdir -p "$remote_home" "$remote_bin" "$remote_shared"
+cat > "$remote_bin/git" <<'EOF_REMOTE_GIT'
+#!/usr/bin/env bash
+set -e
+if [[ "$1" == "clone" ]]; then
+  target="${@: -1}"
+  mkdir -p "$target/.git"
+  cat > "$target/install.sh" <<'EOF_REMOTE_INSTALL'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "${REMOTE_INSTALL_LOG:?}"
+EOF_REMOTE_INSTALL
+  chmod +x "$target/install.sh"
+  exit 0
+fi
+if [[ "$1" == "-C" ]]; then
+  dir="$2"; shift 2
+  case "$1" in
+    config) exit 0 ;;
+    remote) printf '%s\n' "${PIXEL_DEV_BOOTSTRAP_REPO:-https://github.com/nw/pixel-dev-bootstrap.git}"; exit 0 ;;
+    status) exit 0 ;;
+    pull) exit 0 ;;
+  esac
+fi
+exit 0
+EOF_REMOTE_GIT
+chmod +x "$remote_bin/git"
+TERMUX_VERSION=test PREFIX=/data/data/com.termux/files/usr \
+  HOME="$remote_home" PATH="$remote_bin:$PATH" \
+  REMOTE_INSTALL_LOG="$remote_log" \
+  bash "$ROOT_DIR/bootstrap.sh" --no-upgrade >/dev/null
+test -d "$remote_shared/dev/pixel-dev-bootstrap/.git"
+test -f "$remote_shared/dev/pixel-dev-bootstrap/install.sh"
+grep -qx -- '--no-upgrade' "$remote_log"
+
 printf 'Testing Termux configuration install...\n'
 HOME="$termux_home" \
   bash "$ROOT_DIR/install.sh" --termux --configs-only --no-ssh-key >/dev/null
