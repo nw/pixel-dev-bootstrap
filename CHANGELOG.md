@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.9 — launcher capture, AVF note promotion, and public repo hygiene
+
+- Add a recipe-owned foreground `~/.shortcuts/vnote` launcher/widget entry so voice capture can start directly from Android.
+- Keep shortcut execution inside Termux's approved shortcut tree by copying a regular executable file rather than linking outside it.
+- Extend recipe ownership checks/removal to shortcut copies while preserving user-modified shortcut files.
+- Add AVF `vnote-import [destination]` to explicitly promote the shared voice scratchpad into a project working tree without overwriting existing files.
+- Add a basic public-repository `.gitignore` and the MIT `LICENSE`.
+- Add `ACKNOWLEDGMENTS.md` and README disclosure of substantial OpenAI ChatGPT-assisted implementation, testing, documentation, and design review.
+- Document Google Play Termux's integrated Widget/API surface versus companion-plugin requirements on other Termux distributions.
+
 ## 0.1.8 — public documentation and support boundary
 
 - Documentation-only release; no runtime, installer, recipe, Podman, or `box` behavior changed.

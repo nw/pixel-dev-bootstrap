@@ -1,0 +1,9 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+# Termux launcher/widget shortcuts execute directly, without relying on an
+# interactive ~/.bashrc. Re-establish the shared note boundary explicitly.
+if [[ -d "$HOME/storage/shared/dev" ]]; then
+  export DEV_SHARED="${DEV_SHARED:-$HOME/storage/shared/dev}"
+fi
+
+exec "$HOME/bin/vnote" "$@"

@@ -8,7 +8,7 @@ while IFS= read -r -d '' file; do
   bash -n "$file"
 done < <(
   find "$ROOT_DIR" -type f \
-    \( -name '*.sh' -o -name '*.bash' -o -path '*/bin/*' \) -print0
+    \( -name '*.sh' -o -name '*.bash' -o -path '*/bin/*' -o -path '*/shortcuts/*' \) -print0
 )
 
 termux_home="$(mktemp -d)"
@@ -123,6 +123,32 @@ test ! -e "$avf_home/.config/pixel-dev-bootstrap/shell/boxes.bash"
 grep -q 'runtime = "crun"' "$avf_home/.config/containers/containers.conf"
 grep -q 'driver = "overlay"' "$avf_home/.config/containers/storage.conf"
 grep -q 'mount_program = "/usr/bin/fuse-overlayfs"' "$avf_home/.config/containers/storage.conf"
+
+# Shared voice scratch state should be promoted into AVF project state only by
+# explicit copy, with parent creation and no silent overwrite.
+printf 'Testing AVF vnote-import helper...\n'
+vnote_shared="$test_root/vnote-shared"
+vnote_project="$test_root/vnote-project"
+mkdir -p "$vnote_shared" "$vnote_project"
+printf '%s\n' '# voice scratch' 'captured thought' > "$vnote_shared/voice-scratchpad.md"
+(
+  export HOME="$avf_home" DEV_SHARED="$vnote_shared"
+  # shellcheck disable=SC1090
+  source "$avf_home/.config/pixel-dev-bootstrap/shell/platform.bash"
+  cd "$vnote_project"
+  vnote-import notes/idea.md >/dev/null
+)
+cmp -s "$vnote_shared/voice-scratchpad.md" "$vnote_project/notes/idea.md"
+if (
+  export HOME="$avf_home" DEV_SHARED="$vnote_shared"
+  # shellcheck disable=SC1090
+  source "$avf_home/.config/pixel-dev-bootstrap/shell/platform.bash"
+  cd "$vnote_project"
+  vnote-import notes/idea.md >/dev/null 2>&1
+); then
+  echo "vnote-import unexpectedly overwrote an existing destination" >&2
+  exit 1
+fi
 
 # Podman helper parser qualification. Stub podman and inspect argv.
 # shellcheck disable=SC1090
@@ -256,6 +282,10 @@ test -d "$termux_home/.local/share/pixel-dev-bootstrap/recipes/vnote"
 test -L "$termux_home/bin/vnote"
 test "$(readlink -f "$termux_home/bin/vnote")" = \
   "$termux_home/.local/share/pixel-dev-bootstrap/recipes/vnote/bin/vnote"
+test -f "$termux_home/.shortcuts/vnote"
+test ! -L "$termux_home/.shortcuts/vnote"
+test -x "$termux_home/.shortcuts/vnote"
+grep -q '\$HOME/bin/vnote' "$termux_home/.shortcuts/vnote"
 grep -q 'install -y termux-api ffmpeg' "$pkg_log"
 
 # A failed stage copy must not disturb the working recipe or install packages.
@@ -281,6 +311,8 @@ test -d "$termux_home/.local/share/pixel-dev-bootstrap/recipes/vnote"
 test -L "$termux_home/bin/vnote"
 test "$(readlink -f "$termux_home/bin/vnote")" = \
   "$termux_home/.local/share/pixel-dev-bootstrap/recipes/vnote/bin/vnote"
+test -f "$termux_home/.shortcuts/vnote"
+test -x "$termux_home/.shortcuts/vnote"
 test ! -s "$pkg_log"
 test -z "$(find "$termux_home/.local/share/pixel-dev-bootstrap/recipes" \
   -maxdepth 1 -name '.vnote.new.*' -print -quit)"
@@ -324,8 +356,23 @@ TERMUX_VERSION=test PREFIX=/data/data/com.termux/files/usr \
   RECIPE_TEST_PKG_LOG="$pkg_log" \
   "$termux_home/bin/recipe" remove vnote >/dev/null
 test ! -e "$termux_home/bin/vnote"
+test ! -e "$termux_home/.shortcuts/vnote"
 test ! -e "$termux_home/.local/share/pixel-dev-bootstrap/recipes/vnote"
 test ! -s "$pkg_log"
+
+# Recipe removal must not delete a shortcut after the user has modified it.
+TERMUX_VERSION=test PREFIX=/data/data/com.termux/files/usr \
+  HOME="$termux_home" PATH="$fake_bin:$termux_home/bin:$PATH" \
+  RECIPE_TEST_PKG_LOG="$pkg_log" \
+  "$termux_home/bin/recipe" install vnote >/dev/null
+printf '# user customization\n' >> "$termux_home/.shortcuts/vnote"
+TERMUX_VERSION=test PREFIX=/data/data/com.termux/files/usr \
+  HOME="$termux_home" PATH="$fake_bin:$termux_home/bin:$PATH" \
+  RECIPE_TEST_PKG_LOG="$pkg_log" \
+  "$termux_home/bin/recipe" remove vnote >/dev/null
+test -f "$termux_home/.shortcuts/vnote"
+grep -q 'user customization' "$termux_home/.shortcuts/vnote"
+rm -f -- "$termux_home/.shortcuts/vnote"
 
 # reseed clones missing repos and preserves existing working trees.
 manifest="$test_root/repos.txt"

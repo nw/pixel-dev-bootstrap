@@ -31,6 +31,21 @@ backup; use `/mnt/shared/dev` as an offline reset-resilient cache.
 
 Do not use `/mnt/shared` as the primary home for repositories, package trees, build directories, databases, or container storage. Export meaningful outputs there deliberately.
 
+### Promote voice notes into a project
+
+When the optional Termux `vnote` recipe writes to the default shared scratchpad,
+AVF can explicitly promote that material into a project-owned file:
+
+```bash
+cd ~/src/project
+vnote-import notes/idea.md
+```
+
+The helper copies `$DEV_SHARED/voice-scratchpad.md`, creates the destination's
+parent directories, and refuses to overwrite an existing file. Set
+`VNOTE_SHARED_FILE` to use another shared source. This preserves the intended
+boundary: shared storage is interchange; `/home/droid` is the working filesystem.
+
 ## VM resources
 
 The default 1 GB allocation is a useful low-cost starting point.

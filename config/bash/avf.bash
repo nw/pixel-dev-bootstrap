@@ -13,6 +13,26 @@ mkdir -p "$HOME/src" "$HOME/scratch" "$HOME/bin" 2>/dev/null || true
 
 downloads() { cd "$DOWNLOADS" || return; }
 
+vnote-import() {
+  local src="${VNOTE_SHARED_FILE:-$DEV_SHARED/voice-scratchpad.md}"
+  local dest="${1:-$PWD/voice-scratchpad.md}"
+
+  [[ -f "$src" ]] || {
+    echo "vnote-import: no scratchpad found at $src" >&2
+    return 1
+  }
+
+  mkdir -p -- "$(dirname -- "$dest")"
+
+  if [[ -e "$dest" ]]; then
+    echo "vnote-import: destination exists: $dest" >&2
+    return 1
+  fi
+
+  cp -- "$src" "$dest"
+  printf 'Imported voice note -> %s\n' "$dest"
+}
+
 avfinfo() {
   echo "== AVF Debian =="
   uname -a

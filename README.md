@@ -314,7 +314,11 @@ The ownership boundary is intentionally narrow:
 - optional shell integration is a separate
   `~/.config/pixel-dev-bootstrap/recipes.d/<name>.bash` include, never an inline
   append to `~/.bashrc`;
-- recipe removal deletes only those recipe-owned private files and links.
+- optional launcher/widget shortcuts are copied as regular executable files under
+  `~/.shortcuts/` because Termux shortcut validation requires the canonical file
+  to remain inside that directory;
+- recipe removal deletes only recipe-owned private files, links, and unchanged
+  shortcut copies. Shared packages and user-modified shortcut files are left alone.
 
 This copy-first model is deliberate. The public/bootstrap copy may live under
 Android shared storage; installed recipe payloads do not execute from or depend
@@ -339,9 +343,23 @@ recipe install vnote
 vnote
 ```
 
+The recipe also installs a foreground launcher script at:
+
+```text
+~/.shortcuts/vnote
+```
+
+That makes voice capture available from Termux's widget/launcher shortcut surface
+without first navigating into a shell. Current Google Play Termux includes Widget
+functionality in the main app; F-Droid/GitHub Termux users need the matching
+Termux:Widget plugin from the same signing source. Refresh the widget after
+installing or updating the recipe if the shortcut is not immediately visible.
+
 The recipe ensures `termux-api` and `ffmpeg`. The matching **Termux:API Android
-companion app must still be installed from the same signing source as Termux**.
-The recipe deliberately does not install a Whisper engine or model.
+companion app must still be installed from the same signing source as Termux**
+when that Termux distribution requires the separate companion app. Current Google
+Play Termux exposes the speech/microphone commands used by `vnote` directly. The
+recipe deliberately does not install a Whisper engine or model.
 
 ```bash
 vnote       # Android STT first; local fallback max 120 seconds
@@ -377,6 +395,19 @@ Use it for:
 - ESP-IDF or other persistent toolchain environments when needed
 - disposable experiments
 - Linux graphical applications through Display
+
+Voice notes captured on the Termux side can be promoted from shared scratch state
+into a project working tree explicitly:
+
+```bash
+cd ~/src/project
+vnote-import notes/idea.md
+```
+
+`vnote-import` copies `$DEV_SHARED/voice-scratchpad.md` by default, creates parent
+directories, and refuses to overwrite an existing destination. Override the source
+with `VNOTE_SHARED_FILE` when needed. The explicit copy keeps `/mnt/shared` as the
+interchange surface while project-owned notes live under the normal AVF filesystem.
 
 See [`docs/AVF.md`](docs/AVF.md) for persistence and VM-resource guidance.
 
@@ -719,3 +750,18 @@ recipe install vnote     # only when this capability is wanted
 
 A user-owned extension may choose to install personal recipes automatically,
 but upstream bootstrap does not.
+
+## License
+
+Pixel Dev Bootstrap is released under the [MIT License](LICENSE).
+
+## Development and AI assistance
+
+The project is scoped, directed, reviewed, and maintained by Nathan White.
+OpenAI's ChatGPT contributed materially during the 0.1.x development cycle,
+including implementation, test construction, documentation, design iteration, and
+review. Other AI models were also used as independent feedback/review tools.
+
+AI output is treated as engineering input, not authority: shipped changes are
+reviewed, tested, and accepted by the maintainer. No AI service is required at
+runtime. See [ACKNOWLEDGMENTS.md](ACKNOWLEDGMENTS.md).

@@ -5,6 +5,7 @@ CATALOG="${PIXEL_RECIPE_CATALOG:-$HOME/.local/share/pixel-dev-bootstrap/recipe-c
 INSTALL_ROOT="${PIXEL_RECIPE_INSTALL_ROOT:-$HOME/.local/share/pixel-dev-bootstrap/recipes}"
 SHELL_ROOT="${PIXEL_RECIPE_SHELL_ROOT:-$HOME/.config/pixel-dev-bootstrap/recipes.d}"
 BIN_ROOT="${PIXEL_RECIPE_BIN_ROOT:-$HOME/bin}"
+SHORTCUT_ROOT="${PIXEL_RECIPE_SHORTCUT_ROOT:-$HOME/.shortcuts}"
 
 usage() {
   cat <<'USAGE'
@@ -17,7 +18,7 @@ Commands:
   info <name>      Show a recipe README
   install <name>   Install/update a recipe and ensure its Termux packages
   check <name>     Check installed recipe dependencies/integration
-  remove <name>    Remove only recipe-owned files and links
+  remove <name>    Remove only recipe-owned files, shortcuts, and links
 
 Package removal is deliberately manual. Recipes may share dependencies and do
 not own packages installed through pkg.
@@ -153,6 +154,16 @@ unlink_recipe_links() {
     done
   fi
 
+  if [[ -d "$installed/shortcuts" ]]; then
+    for source in "$installed/shortcuts"/*; do
+      [[ -f "$source" ]] || continue
+      target="$SHORTCUT_ROOT/$(basename -- "$source")"
+      if [[ -f "$target" && ! -L "$target" ]] && cmp -s -- "$target" "$source"; then
+        rm -f -- "$target"
+      fi
+    done
+  fi
+
   target="$SHELL_ROOT/$(basename -- "$installed").bash"
   if [[ -L "$target" ]]; then
     current="$(readlink -f -- "$target" 2>/dev/null || true)"
@@ -198,7 +209,7 @@ install_recipe() {
   [[ -d "$installed" ]] && old_root="$installed"
 
   # Preflight links before replacing an installed payload.
-  local file target current
+  local file target current old_shortcut
   if [[ -d "$source/bin" ]]; then
     for file in "$source/bin"/*; do
       [[ -f "$file" ]] || continue
@@ -225,6 +236,26 @@ install_recipe() {
         die "Refusing to replace existing shell include not owned by recipe '$name': $target"
       fi
     fi
+  fi
+
+  # Widget/launcher shortcuts must be regular files under ~/.shortcuts; Termux
+  # intentionally rejects symlinks whose canonical target escapes that tree.
+  # A recipe may replace a shortcut only when the current file is byte-for-byte
+  # the copy installed by the prior version of the same recipe.
+  if [[ -d "$source/shortcuts" ]]; then
+    for file in "$source/shortcuts"/*; do
+      [[ -f "$file" ]] || continue
+      target="$SHORTCUT_ROOT/$(basename -- "$file")"
+      if [[ -e "$target" || -L "$target" ]]; then
+        old_shortcut="${old_root:+$old_root/shortcuts/$(basename -- "$file")}"
+        if [[ -n "$old_shortcut" && -f "$old_shortcut" && -f "$target" && ! -L "$target" ]] && \
+           cmp -s -- "$target" "$old_shortcut"; then
+          : # Prior recipe-owned copy; replacement is safe.
+        else
+          die "Refusing to replace existing shortcut not owned by recipe '$name': $target"
+        fi
+      fi
+    done
   fi
 
   # Stage a complete private copy before changing packages, links, or the
@@ -255,14 +286,27 @@ install_recipe() {
     die "Failed to activate staged recipe payload: $name"
   fi
 
-  # Recipes are copied into Termux-private storage first. Only private-to-private
-  # symlinks are used for command and shell integration; shared storage is never
-  # a symlink target.
+  # Recipes are copied into Termux-private storage first. Command and shell
+  # integration use private-to-private symlinks; launcher shortcuts are regular
+  # executable copies under ~/.shortcuts so Termux Widget can validate them.
+  # Shared storage is never an execution or symlink target.
   if [[ -d "$installed/bin" ]]; then
     for file in "$installed/bin"/*; do
       [[ -f "$file" ]] || continue
       chmod 0755 "$file"
       link_owned_file "$file" "$BIN_ROOT/$(basename -- "$file")" "$old_root"
+    done
+  fi
+
+  if [[ -d "$installed/shortcuts" ]]; then
+    mkdir -p -- "$SHORTCUT_ROOT"
+    chmod 0700 "$SHORTCUT_ROOT"
+    for file in "$installed/shortcuts"/*; do
+      [[ -f "$file" ]] || continue
+      chmod 0755 "$file"
+      target="$SHORTCUT_ROOT/$(basename -- "$file")"
+      cp -- "$file" "$target"
+      chmod 0700 "$target"
     done
   fi
 
@@ -274,6 +318,7 @@ install_recipe() {
   say "Recipe installed: $name"
   info "Payload: $installed"
   info "Packages are dependencies, not recipe-owned state; removal is manual."
+  [[ -d "$installed/shortcuts" ]] && info "Launcher shortcuts: $SHORTCUT_ROOT"
 }
 
 check_recipe() {
