@@ -1,0 +1,416 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+DEV_SHARED="${DEV_SHARED:-/mnt/shared/dev}"
+BOX_CONFIG_ROOT="${BOX_CONFIG_ROOT:-$DEV_SHARED/configs/boxes.d}"
+BOX_REGISTRIES_FILE="${BOX_REGISTRIES_FILE:-$DEV_SHARED/configs/registries.conf}"
+
+usage() {
+  cat <<'USAGE'
+usage: box <command> [args]
+
+Named OCI environments for Pixel AVF Debian. Podman owns images, containers,
+and credentials; box only resolves durable definitions and runtime defaults.
+
+Commands:
+  box list
+  box info <name>
+  box pull <name>
+  box run <name> [directory] [-p port]... [-e KEY=value]... [-v mount]...
+          [--bind address] [-- command ...]
+  box shell <name> [directory] [-p port]... [-e KEY=value]... [-v mount]...
+            [--bind address]
+  box registries
+  box login <registry-alias>
+  box logout <registry-alias>
+  box auth
+
+Definitions:
+  $DEV_SHARED/configs/boxes.d/<name>.box
+
+Registry aliases:
+  $DEV_SHARED/configs/registries.conf
+USAGE
+}
+
+die() {
+  printf 'box: %s\n' "$*" >&2
+  exit 2
+}
+
+require_podman() {
+  command -v podman >/dev/null 2>&1 || {
+    printf 'box: podman is not installed\n' >&2
+    exit 127
+  }
+}
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+valid_name() {
+  [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]
+}
+
+registry_prefix() {
+  local wanted="$1"
+  local line key value
+
+  if [[ "$wanted" == "public" && ! -r "$BOX_REGISTRIES_FILE" ]]; then
+    printf '%s\n' 'docker.io/library'
+    return 0
+  fi
+
+  [[ -r "$BOX_REGISTRIES_FILE" ]] || return 1
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    line="$(trim "$line")"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" == *=* ]] || continue
+    key="$(trim "${line%%=*}")"
+    value="$(trim "${line#*=}")"
+    [[ "$key" == "$wanted" ]] || continue
+    [[ -n "$value" ]] || return 1
+    printf '%s\n' "${value%/}"
+    return 0
+  done < "$BOX_REGISTRIES_FILE"
+
+  if [[ "$wanted" == "public" ]]; then
+    printf '%s\n' 'docker.io/library'
+    return 0
+  fi
+
+  return 1
+}
+
+registry_host() {
+  local prefix="$1"
+  printf '%s\n' "${prefix%%/*}"
+}
+
+resolve_image() {
+  local specification="$1"
+  local possible_alias prefix remainder
+
+  if [[ "$specification" == *:* ]]; then
+    possible_alias="${specification%%:*}"
+    if valid_name "$possible_alias" && prefix="$(registry_prefix "$possible_alias" 2>/dev/null)"; then
+      remainder="${specification#*:}"
+      [[ -n "$remainder" ]] || die "registry alias '$possible_alias' has no image name"
+      printf '%s/%s\n' "${prefix%/}" "${remainder#/}"
+      return 0
+    fi
+  fi
+
+  if [[ "$specification" == */* ]]; then
+    printf '%s\n' "$specification"
+  else
+    printf 'docker.io/library/%s\n' "$specification"
+  fi
+}
+
+box_file() {
+  local name="$1"
+  valid_name "$name" || die "invalid box name: $name"
+  printf '%s/%s.box\n' "$BOX_CONFIG_ROOT" "$name"
+}
+
+BOX_DESCRIPTION=""
+BOX_IMAGE=""
+BOX_WORKDIR="/work"
+BOX_SHELL="/bin/sh"
+BOX_ENV=()
+BOX_MOUNTS=()
+
+load_box() {
+  local name="$1"
+  local file line key value
+  file="$(box_file "$name")"
+  [[ -r "$file" ]] || die "box not found: $name ($file)"
+
+  BOX_DESCRIPTION=""
+  BOX_IMAGE=""
+  BOX_WORKDIR="/work"
+  BOX_SHELL="/bin/sh"
+  BOX_ENV=()
+  BOX_MOUNTS=()
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    line="$(trim "$line")"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" == *=* ]] || die "$file: expected key=value: $line"
+
+    key="$(trim "${line%%=*}")"
+    value="$(trim "${line#*=}")"
+
+    case "$key" in
+      description) BOX_DESCRIPTION="$value" ;;
+      image) BOX_IMAGE="$value" ;;
+      workdir) BOX_WORKDIR="${value:-/work}" ;;
+      shell) BOX_SHELL="${value:-/bin/sh}" ;;
+      env) [[ -n "$value" ]] && BOX_ENV+=("$value") ;;
+      mount) [[ -n "$value" ]] && BOX_MOUNTS+=("$value") ;;
+      *) die "$file: unsupported key: $key" ;;
+    esac
+  done < "$file"
+
+  [[ -n "$BOX_IMAGE" ]] || die "$file: image= is required"
+  BOX_IMAGE="$(resolve_image "$BOX_IMAGE")"
+}
+
+port_mapping() {
+  local specification="$1"
+  local bind_address="$2"
+  case "$specification" in
+    *:*:*) printf '%s\n' "$specification" ;;
+    *:*) printf '%s:%s\n' "$bind_address" "$specification" ;;
+    *) printf '%s:%s:%s\n' "$bind_address" "$specification" "$specification" ;;
+  esac
+}
+
+list_boxes() {
+  local had_nullglob=0 file name
+  [[ -d "$BOX_CONFIG_ROOT" ]] || {
+    printf 'No boxes configured.\n'
+    return 0
+  }
+
+  shopt -q nullglob && had_nullglob=1
+  shopt -s nullglob
+  local -a files=("$BOX_CONFIG_ROOT"/*.box)
+  ((had_nullglob)) || shopt -u nullglob
+
+  ((${#files[@]})) || {
+    printf 'No boxes configured.\n'
+    return 0
+  }
+
+  printf '%-18s %-42s %s\n' NAME IMAGE DESCRIPTION
+  for file in "${files[@]}"; do
+    name="$(basename -- "$file" .box)"
+    load_box "$name"
+    printf '%-18s %-42s %s\n' "$name" "$BOX_IMAGE" "$BOX_DESCRIPTION"
+  done
+}
+
+info_box() {
+  local name="$1" item
+  load_box "$name"
+  printf 'name:        %s\n' "$name"
+  printf 'image:       %s\n' "$BOX_IMAGE"
+  printf 'workdir:     %s\n' "$BOX_WORKDIR"
+  printf 'shell:       %s\n' "$BOX_SHELL"
+  [[ -n "$BOX_DESCRIPTION" ]] && printf 'description: %s\n' "$BOX_DESCRIPTION"
+  for item in "${BOX_ENV[@]}"; do printf 'env:         %s\n' "$item"; done
+  for item in "${BOX_MOUNTS[@]}"; do printf 'mount:       %s\n' "$item"; done
+}
+
+run_box() {
+  local mode="$1"
+  shift
+  (($# >= 1)) || { usage >&2; exit 2; }
+
+  local name="$1"
+  shift
+  load_box "$name"
+  require_podman
+
+  local directory="$PWD"
+  local bind_address="127.0.0.1"
+  local directory_set=0 seen_separator=0 argument
+  local -a ports=() envs=() mounts=() command=()
+
+  while (($#)); do
+    argument="$1"
+    shift
+
+    if ((seen_separator)); then
+      command+=("$argument")
+      continue
+    fi
+
+    case "$argument" in
+      --)
+        seen_separator=1
+        ;;
+      -p|--port)
+        (($#)) || die "$argument requires a value"
+        ports+=("$1")
+        shift
+        ;;
+      -e|--env)
+        (($#)) || die "$argument requires KEY=value"
+        [[ "$1" == *=* ]] || die "$argument requires KEY=value"
+        envs+=("$1")
+        shift
+        ;;
+      -v|--mount)
+        (($#)) || die "$argument requires host:container[:options]"
+        mounts+=("$1")
+        shift
+        ;;
+      --bind)
+        (($#)) || die "--bind requires an address"
+        bind_address="$1"
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      -*)
+        die "unknown run option: $argument"
+        ;;
+      *)
+        if ((directory_set)); then
+          die "unexpected positional argument: $argument (commands require --)"
+        fi
+        directory="$argument"
+        directory_set=1
+        ;;
+    esac
+  done
+
+  directory="$(realpath -m -- "$directory")"
+  [[ -d "$directory" ]] || die "directory does not exist: $directory"
+
+  local -a arguments=(
+    run --rm -it
+    --init
+    --pull=missing
+    --userns=keep-id
+    --mount "type=bind,src=$directory,dst=$BOX_WORKDIR"
+    --workdir "$BOX_WORKDIR"
+  )
+
+  local value mapping
+  for value in "${BOX_MOUNTS[@]}"; do arguments+=(--volume "$value"); done
+  for value in "${mounts[@]}"; do arguments+=(--volume "$value"); done
+  for value in "${BOX_ENV[@]}"; do arguments+=(--env "$value"); done
+  # Runtime env flags come after definition defaults so they naturally override.
+  for value in "${envs[@]}"; do arguments+=(--env "$value"); done
+  for value in "${ports[@]}"; do
+    mapping="$(port_mapping "$value" "$bind_address")"
+    arguments+=(--publish "$mapping")
+  done
+
+  [[ -n "${TERM:-}" ]] && arguments+=(--env "TERM=$TERM")
+  [[ -n "${COLORTERM:-}" ]] && arguments+=(--env "COLORTERM=$COLORTERM")
+
+  if [[ "$mode" == "shell" ]]; then
+    ((${#command[@]} == 0)) || die "box shell does not accept a command after --"
+    podman "${arguments[@]}" "$BOX_IMAGE" "$BOX_SHELL"
+  elif ((${#command[@]})); then
+    podman "${arguments[@]}" "$BOX_IMAGE" "${command[@]}"
+  else
+    podman "${arguments[@]}" "$BOX_IMAGE"
+  fi
+}
+
+list_registries() {
+  local line key value
+  printf '%-16s %-42s %s\n' ALIAS PREFIX HOST
+  if [[ ! -r "$BOX_REGISTRIES_FILE" ]]; then
+    printf '%-16s %-42s %s\n' public docker.io/library docker.io
+    return 0
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    line="$(trim "$line")"
+    [[ -z "$line" || "$line" == \#* || "$line" != *=* ]] && continue
+    key="$(trim "${line%%=*}")"
+    value="$(trim "${line#*=}")"
+    valid_name "$key" || continue
+    [[ -n "$value" ]] || continue
+    printf '%-16s %-42s %s\n' "$key" "$value" "$(registry_host "$value")"
+  done < "$BOX_REGISTRIES_FILE"
+}
+
+registry_action() {
+  local action="$1" alias="$2" prefix host
+  valid_name "$alias" || die "invalid registry alias: $alias"
+  prefix="$(registry_prefix "$alias")" || die "unknown registry alias: $alias"
+  host="$(registry_host "$prefix")"
+  require_podman
+  podman "$action" "$host"
+}
+
+auth_status() {
+  local line key value host login
+  require_podman
+  printf '%-16s %-28s %s\n' ALIAS HOST LOGIN
+
+  if [[ ! -r "$BOX_REGISTRIES_FILE" ]]; then
+    login="$(podman login --get-login docker.io 2>/dev/null || true)"
+    printf '%-16s %-28s %s\n' public docker.io "${login:--}"
+    return 0
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%$'\r'}"
+    line="$(trim "$line")"
+    [[ -z "$line" || "$line" == \#* || "$line" != *=* ]] && continue
+    key="$(trim "${line%%=*}")"
+    value="$(trim "${line#*=}")"
+    valid_name "$key" || continue
+    [[ -n "$value" ]] || continue
+    host="$(registry_host "$value")"
+    login="$(podman login --get-login "$host" 2>/dev/null || true)"
+    printf '%-16s %-28s %s\n' "$key" "$host" "${login:--}"
+  done < "$BOX_REGISTRIES_FILE"
+}
+
+command_name="${1:-}"
+[[ -n "$command_name" ]] || { usage >&2; exit 2; }
+shift || true
+
+case "$command_name" in
+  list)
+    (($# == 0)) || die "list takes no arguments"
+    list_boxes
+    ;;
+  info)
+    (($# == 1)) || die "usage: box info <name>"
+    info_box "$1"
+    ;;
+  pull)
+    (($# == 1)) || die "usage: box pull <name>"
+    load_box "$1"
+    require_podman
+    podman pull "$BOX_IMAGE"
+    ;;
+  run)
+    run_box run "$@"
+    ;;
+  shell)
+    run_box shell "$@"
+    ;;
+  registries)
+    (($# == 0)) || die "registries takes no arguments"
+    list_registries
+    ;;
+  login)
+    (($# == 1)) || die "usage: box login <registry-alias>"
+    registry_action login "$1"
+    ;;
+  logout)
+    (($# == 1)) || die "usage: box logout <registry-alias>"
+    registry_action logout "$1"
+    ;;
+  auth)
+    (($# == 0)) || die "auth takes no arguments"
+    auth_status
+    ;;
+  -h|--help|help)
+    usage
+    ;;
+  *)
+    die "unknown command: $command_name"
+    ;;
+esac

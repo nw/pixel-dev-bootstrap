@@ -1,0 +1,8 @@
+# Registry aliases used by the AVF `box` helper.
+#
+# Values are image prefixes. `box login/logout/auth` derive the registry host
+# from the first path component and delegate credentials to Podman.
+public=docker.io/library
+
+# Example private namespace:
+# private=ghcr.io/your-user-or-org

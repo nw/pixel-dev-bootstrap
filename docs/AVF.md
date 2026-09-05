@@ -69,9 +69,11 @@ shell + editor + git + ssh + diagnostics + podman
 Project runtimes belong in images:
 
 ```bash
-nodebox ~/src/project 3000
-pybox ~/src/project
+pm node:24-bookworm ~/src/project 3000
 pm rust:latest ~/src/project - -- cargo test
+
+# Named/repeated environment contracts can be described as data and run via box.
+box run esp ~/src/project -e IDF_TARGET=esp32c6 -- idf.py build
 ```
 
 Use named Podman volumes for caches or service data when useful, but regard them as VM-local and disposable unless explicitly exported.
@@ -136,24 +138,66 @@ a canonical copy elsewhere if the list matters after device loss.
 reseed
 ```
 
-## Base vs image-specific helpers
+## Named OCI environments
 
-The default bootstrap profile is deliberately runtime-neutral. It installs the
-Podman substrate and the generic `pm`, `pms`, and `pmlan` helpers, but does not
-choose Node, Python, Debian, or other workload images on your behalf.
+The AVF installer always establishes the same small substrate. There is no
+`--with-boxes` or image-specific install profile. Use:
 
-If a recurring interactive pattern makes the shorthand useful, opt in with:
-
-```bash
-bash /mnt/shared/dev/pixel-dev-bootstrap/install.sh --avf --configs-only --with-boxes
+```text
+pm / pms / pmlan   ad-hoc OCI images
+box                named OCI environment + runtime defaults
+Podman             image/container/auth lifecycle
+Distrobox          only after persistent host integration earns it
 ```
 
-Return to the base profile with:
+`box` reads reset-resilient, data-only definitions from:
 
-```bash
-bash /mnt/shared/dev/pixel-dev-bootstrap/install.sh --avf --configs-only --base
+```text
+$DEV_SHARED/configs/boxes.d/<name>.box
 ```
 
-The base profile is the architectural contract. Image-specific shortcuts are a
-replaceable convenience layer.
+and registry aliases from:
 
+```text
+$DEV_SHARED/configs/registries.conf
+```
+
+The installer seeds only:
+
+```text
+public=docker.io/library
+```
+
+A private alias can map a short name to a registry namespace:
+
+```text
+private=ghcr.io/your-user-or-org
+```
+
+Credentials are not stored by the bootstrap. `box login private` simply
+resolves `private` to its registry host and delegates to `podman login`.
+
+A substantial environment such as ESP-IDF can then remain entirely outside the
+AVF host:
+
+```text
+description=ESP-IDF toolchain environment
+image=private:pulse-esp-idf:5.4.4
+workdir=/work
+shell=/bin/bash
+env=IDF_TARGET=esp32s3
+mount=/mnt/shared/dev/artifacts:/artifacts
+```
+
+Runtime variation stays explicit rather than multiplying images or definitions:
+
+```bash
+box run esp ~/src/pulse \
+  -e IDF_TARGET=esp32c6 \
+  -p 8080:8080 \
+  -- idf.py build
+```
+
+Ports bind to `127.0.0.1` by default. `--bind 0.0.0.0` is the deliberate LAN
+exposure path. `box` does not remove images, own credentials, build images, or
+manage versions; those remain Podman/OCI responsibilities.

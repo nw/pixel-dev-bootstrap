@@ -31,7 +31,7 @@ elif [[ "$platform" == "avf" ]]; then
 fi
 
 headr "Commands"
-for command_name in git ssh tmux nvim micro podman buildah jq rg fd fdfind; do
+for command_name in git ssh tmux nvim micro podman buildah box jq rg fd fdfind; do
   if command -v "$command_name" >/dev/null 2>&1; then
     ok "$command_name -> $(command -v "$command_name")"
   else
@@ -86,5 +86,17 @@ if [[ "$platform" == "avf" ]]; then
     else
       warn "podman is installed but podman info failed"
     fi
+  fi
+
+  headr "Named OCI boxes"
+  box_root="${DEV_SHARED:-/mnt/shared/dev}/configs/boxes.d"
+  registries_file="${DEV_SHARED:-/mnt/shared/dev}/configs/registries.conf"
+  [[ -r "$registries_file" ]] && ok "registry aliases: $registries_file" \
+    || warn "registry alias config missing: $registries_file"
+  if [[ -d "$box_root" ]]; then
+    box_count="$(find "$box_root" -maxdepth 1 -type f -name '*.box' | wc -l | tr -d ' ')"
+    ok "box definitions: $box_count ($box_root)"
+  else
+    warn "box definition directory missing: $box_root"
   fi
 fi

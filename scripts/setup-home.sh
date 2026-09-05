@@ -5,7 +5,6 @@ set -Eeuo pipefail
 : "${BOOTSTRAP_PLATFORM:?BOOTSTRAP_PLATFORM is required}"
 : "${BOOTSTRAP_GENERATE_SSH_KEY:=1}"
 : "${BOOTSTRAP_RESTORE_SSH_KEY:=0}"
-: "${BOOTSTRAP_INSTALL_BOXES:=0}"
 
 # shellcheck source=./lib.sh
 source "$BOOTSTRAP_ROOT/scripts/lib.sh"
@@ -40,14 +39,8 @@ if [[ "$BOOTSTRAP_PLATFORM" == "avf" ]]; then
   install_file "$BOOTSTRAP_ROOT/config/bash/podman.bash" \
     "$HOME/.config/pixel-dev-bootstrap/shell/podman.bash" 0644
 
-  if [[ "$BOOTSTRAP_INSTALL_BOXES" == "1" ]]; then
-    install_file "$BOOTSTRAP_ROOT/config/bash/boxes.bash" \
-      "$HOME/.config/pixel-dev-bootstrap/shell/boxes.bash" 0644
-  else
-    # Base is intentionally the default. Remove stale optional helpers so a
-    # previous --with-boxes run does not silently survive a return to base.
-    rm -f -- "$HOME/.config/pixel-dev-bootstrap/shell/boxes.bash"
-  fi
+  # 0.1.6 removed the old image-specific boxes.bash convenience layer.
+  rm -f -- "$HOME/.config/pixel-dev-bootstrap/shell/boxes.bash"
 
   mkdir -p "$HOME/.config/containers"
   install_file "$BOOTSTRAP_ROOT/config/containers/containers.conf" \
@@ -80,6 +73,10 @@ for helper in "$local_bin_source"/*; do
   helper_name="$(basename -- "$helper")"
   if [[ "$helper_name" == "recipe" && "$BOOTSTRAP_PLATFORM" != "termux" ]]; then
     rm -f -- "$HOME/bin/recipe"
+    continue
+  fi
+  if [[ "$helper_name" == "box" && "$BOOTSTRAP_PLATFORM" != "avf" ]]; then
+    rm -f -- "$HOME/bin/box"
     continue
   fi
   install_file "$helper" "$HOME/bin/$helper_name" 0755

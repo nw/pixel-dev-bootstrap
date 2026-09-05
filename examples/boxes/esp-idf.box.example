@@ -1,0 +1,13 @@
+# Example named OCI environment for a substantial toolchain.
+# Copy to:
+#   /mnt/shared/dev/configs/boxes.d/esp.box
+# and replace image= with an image you actually publish/use.
+
+description=ESP-IDF toolchain environment
+image=private:pulse-esp-idf:5.4.4
+workdir=/work
+shell=/bin/bash
+
+# Repeated env= and mount= entries are allowed.
+env=IDF_TARGET=esp32s3
+mount=/mnt/shared/dev/artifacts:/artifacts

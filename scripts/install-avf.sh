@@ -7,7 +7,6 @@ set -Eeuo pipefail
 : "${BOOTSTRAP_GENERATE_SSH_KEY:=1}"
 : "${BOOTSTRAP_RESTORE_SSH_KEY:=0}"
 : "${BOOTSTRAP_INSTALL_PODMAN:=1}"
-: "${BOOTSTRAP_INSTALL_BOXES:=0}"
 
 # shellcheck source=./lib.sh
 source "$BOOTSTRAP_ROOT/scripts/lib.sh"
@@ -75,11 +74,16 @@ if [[ -d /mnt/shared && -w /mnt/shared ]]; then
   mkdir -p \
     /mnt/shared/dev/artifacts \
     /mnt/shared/dev/configs \
+    /mnt/shared/dev/configs/boxes.d \
     /mnt/shared/dev/containers/compose \
     /mnt/shared/dev/exports
   if [[ ! -e /mnt/shared/dev/configs/repos.txt ]]; then
     cp -- "$BOOTSTRAP_ROOT/examples/repos.txt.example" /mnt/shared/dev/configs/repos.txt
     info "Seeded /mnt/shared/dev/configs/repos.txt"
+  fi
+  if [[ ! -e /mnt/shared/dev/configs/registries.conf ]]; then
+    cp -- "$BOOTSTRAP_ROOT/examples/registries.conf.example" /mnt/shared/dev/configs/registries.conf
+    info "Seeded /mnt/shared/dev/configs/registries.conf"
   fi
 else
   warn "/mnt/shared is unavailable or not writable; reset-resilient seed directories were not created"
@@ -192,6 +196,6 @@ Operating model:
   Podman            disposable or named workload state
 
 The installer intentionally leaves Node and project-specific runtimes out of
-AVF's host. The base profile exposes pm/pms/pmlan plus explicit Podman commands.
-Use --with-boxes only if image-specific nodebox/pybox/debbox shorthand earns its place.
+AVF's host. Use pm/pms/pmlan for ad-hoc images and `box` for named OCI
+environments described by reset-resilient data-only definitions.
 EOF_DONE

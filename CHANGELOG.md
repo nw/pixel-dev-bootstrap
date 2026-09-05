@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.6 — named AVF OCI environments
+
+- Remove the `--base` / `--with-boxes` install-profile split and the old
+  `nodebox` / `pybox` / `debbox` convenience layer.
+- Add AVF-only `box` as a thin data-driven vocabulary over Podman.
+- Store reset-resilient box definitions under `$DEV_SHARED/configs/boxes.d`
+  and seed registry aliases under `$DEV_SHARED/configs/registries.conf`.
+- Add registry alias resolution plus `box login/logout/auth`, while keeping
+  credentials entirely Podman-owned.
+- Add `box list/info/pull/run/shell` with repeatable runtime `--env`, `--port`,
+  and `--mount` flags plus localhost-first `--bind` behavior.
+- Parse box definitions as inert `key=value` data rather than sourcing shell.
+- Add an ESP-IDF-shaped example definition without prescribing an actual
+  toolchain image or registry.
+- Document the complete `box` API and the Git / OCI registry / shared-storage /
+  disposable-AVF persistence split.
+- Extend smoke coverage across image resolution, registry auth delegation,
+  environment overrides, mounts, repeated ports, and configured shells.
+
 ## 0.1.5 — inert recipe discovery and safer recipe updates
 
 - Make `recipe list` and metadata-only `recipe info` inspect literal recipe

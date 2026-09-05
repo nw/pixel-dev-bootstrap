@@ -97,8 +97,6 @@ The installer auto-detects the environment. Shared storage may not preserve exec
 --no-ssh-key      do not generate ~/.ssh/id_ed25519
 --restore-ssh-key restore an age-encrypted SSH key from shared configs
 --no-podman       AVF only: skip Podman and subordinate-ID setup
---base            base profile (default; no image-specific box helpers)
---with-boxes      AVF only: add nodebox/pybox/debbox shorthand
 --configs-only    update dotfiles/helpers without package or system changes
 ```
 
@@ -107,8 +105,11 @@ Examples:
 ```bash
 bash install.sh --configs-only
 bash install.sh --avf --no-upgrade
-bash install.sh --avf --with-boxes
 ```
+
+The installer establishes the substrate only. Optional Termux capability is
+installed explicitly through `recipe`; named AVF workload environments are
+resolved explicitly through `box`. There are no runtime/image install profiles.
 
 Changed configuration files are backed up under:
 
@@ -131,6 +132,7 @@ The newest 10 backup runs are retained by default. Override with
 - tmux baseline
 - small Neovim configuration
 - `clipcopy`, `clippaste`, `dev-doctor`, and `reseed`
+- platform-specific helper: `recipe` on Termux, `box` on AVF
 
 The installer copies modular source files into:
 
@@ -254,7 +256,7 @@ See [`recipes/vnote/README.md`](recipes/vnote/README.md).
 
 ### AVF Debian role
 
-The AVF host stays intentionally smaller. It gets normal shell/editor/network tools plus rootless Podman support, but **does not install Node or project-specific runtimes on the host**. The default shell layer is likewise runtime-neutral: `pm`, `pms`, and `pmlan` are the only container workflow abstractions enabled by default.
+The AVF host stays intentionally smaller. It gets normal shell/editor/network tools plus rootless Podman support, but **does not install Node or project-specific runtimes on the host**. `pm`/`pms`/`pmlan` cover ad-hoc images; `box` adds a thin named-OCI vocabulary without changing the AVF host package baseline.
 
 Use it for:
 
@@ -313,7 +315,7 @@ pclean                # interactive system prune
 pdeepclean            # remove all unused containers/images/volumes/cache
 ```
 
-`pm` is the small disposable-workload helper:
+`pm` remains the cheapest disposable-workload helper:
 
 ```bash
 pm <image> [directory] [port] [-- command ...]
@@ -341,33 +343,179 @@ PM_BIND_ADDRESS=0.0.0.0 pm node:24-bookworm . 3000
 pms node:24-bookworm . 3000
 ```
 
-The base profile stops there. It deliberately does not choose language/runtime
-images for you.
-
-If repeated use establishes a real pattern, opt into a tiny convenience layer:
-
-```bash
-bash install.sh --avf --configs-only --with-boxes
-```
-
-That adds:
-
-```bash
-nodebox . 3000                    # node:24-bookworm
-pybox .                           # python:3.13-bookworm
-debbox .                          # debian:bookworm
-```
-
-Those helpers live in a separate `boxes.bash` file and can be removed cleanly by
-rerunning `bash install.sh --avf --configs-only --base`. They do not pull images
-until invoked.
-
 The Podman functions use `--userns=keep-id`, bind the selected directory at
 `/work`, and default published ports to loopback.
 
-If a runtime helper grows persistent homes, initialization hooks, exported GUI
-apps, special mounts, or environment-specific state, that is the signal to
-promote the pattern to Distrobox rather than continuing to grow shell shorthand.
+### Named OCI boxes
+
+`box` is a thin, AVF-only convenience layer for **named OCI environments**. It
+is not an installer, image manager, package manager, or credential store.
+Podman remains authoritative for image/container/auth state.
+
+The durable definition surface is data only:
+
+```text
+/mnt/shared/dev/configs/
+├── registries.conf
+└── boxes.d/
+    └── <name>.box
+```
+
+Because these files live under `/mnt/shared`, they survive an AVF reset. Keep a
+canonical copy in Git/remote storage if they matter after device loss.
+
+#### Registry aliases
+
+The installer seeds:
+
+```text
+public=docker.io/library
+```
+
+in:
+
+```text
+/mnt/shared/dev/configs/registries.conf
+```
+
+Add a private namespace when useful:
+
+```text
+private=ghcr.io/your-user-or-org
+```
+
+An image specification may then use the alias before the first `:`:
+
+```text
+public:node:24
+    -> docker.io/library/node:24
+
+private:pulse-esp-idf:5.4.4
+    -> ghcr.io/your-user-or-org/pulse-esp-idf:5.4.4
+```
+
+Fully-qualified image names continue to work normally.
+
+Authentication is deliberately delegated to Podman:
+
+```bash
+box registries
+box login private
+box auth
+box logout private
+```
+
+`box login private` resolves the alias to its registry host and invokes
+`podman login`; credentials remain Podman-owned and VM-local. Authentication is
+host-scoped, so multiple aliases on the same registry host share the same Podman
+credential. A reset therefore requires logging into private registries again
+unless you separately choose a Podman-supported credential strategy.
+
+#### Box definition format
+
+A box is one inert `key=value` file; it is parsed, never sourced as shell code:
+
+```text
+# /mnt/shared/dev/configs/boxes.d/esp.box
+description=ESP-IDF toolchain environment
+image=private:pulse-esp-idf:5.4.4
+workdir=/work
+shell=/bin/bash
+env=IDF_TARGET=esp32s3
+mount=/mnt/shared/dev/artifacts:/artifacts
+```
+
+Supported keys:
+
+```text
+description=...     optional human description
+image=...           required OCI image or registry-alias image
+workdir=...         container workdir; default /work
+shell=...           command used by `box shell`; default /bin/sh
+env=KEY=value       repeatable default environment entry
+mount=host:guest    repeatable default Podman volume mapping
+```
+
+No ports are stored in the definition by default. Ports describe the current
+workload/session, so they remain explicit runtime flags.
+
+See [`examples/boxes/esp-idf.box.example`](examples/boxes/esp-idf.box.example)
+for a substantial-toolchain-shaped example. The image name is intentionally a
+placeholder: build/publish the OCI environment that matches your own toolchain.
+
+#### `box` API surface
+
+```text
+box list
+box info <name>
+box pull <name>
+
+box run <name> [directory]
+  [-p|--port <host:container>]...
+  [-e|--env <KEY=value>]...
+  [-v|--mount <host:container[:options]>]...
+  [--bind <address>]
+  [-- <command...>]
+
+box shell <name> [directory]
+  [-p|--port <host:container>]...
+  [-e|--env <KEY=value>]...
+  [-v|--mount <host:container[:options]>]...
+  [--bind <address>]
+
+box registries
+box login <registry-alias>
+box logout <registry-alias>
+box auth
+```
+
+Runtime environment flags are appended after definition defaults, so an
+explicit value naturally wins:
+
+```bash
+box run esp ~/src/pulse \
+  -e IDF_TARGET=esp32c6 \
+  -- idf.py build
+```
+
+Ports are repeatable and bind to loopback by default:
+
+```bash
+box run web ~/src/app \
+  -p 3000:3000 \
+  -p 8080:80
+```
+
+Explicit LAN exposure is visible in the command:
+
+```bash
+box run web ~/src/app -p 3000:3000 --bind 0.0.0.0
+```
+
+A single-number port maps host and container ports identically:
+
+```bash
+box run web ~/src/app -p 3000
+# 127.0.0.1:3000 -> container :3000
+```
+
+`box pull` is only a friendly resolution step over `podman pull`. `box` never
+removes images or volumes; use Podman directly or `pdeepclean` for cleanup.
+Likewise, `box` does not persist registry credentials, resolve image versions,
+or build images. OCI registries and Podman already own those concerns.
+
+This creates a narrow persistence split:
+
+```text
+Git/remotes        source of truth
+OCI registry       reproducible execution environments
+/mnt/shared/dev    reset-resilient definitions/artifacts
+AVF + Podman       disposable execution state
+```
+
+If a named environment starts requiring a persistent home, lifecycle hooks,
+GUI exports, or deep host integration, that is the point where Distrobox may
+have earned itself. `box` should remain a thin name-to-OCI/runtime-default map.
 
 ## Clipboard
 

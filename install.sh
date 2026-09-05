@@ -8,7 +8,6 @@ BOOTSTRAP_UPGRADE=1
 BOOTSTRAP_GENERATE_SSH_KEY=1
 BOOTSTRAP_RESTORE_SSH_KEY=0
 BOOTSTRAP_INSTALL_PODMAN=1
-BOOTSTRAP_INSTALL_BOXES=0
 BOOTSTRAP_CONFIGS_ONLY=0
 
 usage() {
@@ -25,8 +24,6 @@ Options:
   --no-ssh-key      Do not generate ~/.ssh/id_ed25519 when missing
   --restore-ssh-key Restore an age-encrypted SSH key from shared configs
   --no-podman       AVF only: skip Podman and subordinate-ID setup
-  --base            Use the base profile (default; no image-specific box helpers)
-  --with-boxes      AVF only: add nodebox/pybox/debbox convenience helpers
   --configs-only    Install/update dotfiles and helper scripts only
   -h, --help        Show this help
 USAGE
@@ -40,8 +37,6 @@ while (($#)); do
     --no-ssh-key) BOOTSTRAP_GENERATE_SSH_KEY=0 ;;
     --restore-ssh-key) BOOTSTRAP_RESTORE_SSH_KEY=1 ;;
     --no-podman) BOOTSTRAP_INSTALL_PODMAN=0 ;;
-    --base) BOOTSTRAP_INSTALL_BOXES=0 ;;
-    --with-boxes) BOOTSTRAP_INSTALL_BOXES=1 ;;
     --configs-only) BOOTSTRAP_CONFIGS_ONLY=1 ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'Unknown option: %s\n\n' "$1" >&2; usage >&2; exit 2 ;;
@@ -68,7 +63,6 @@ export BOOTSTRAP_UPGRADE
 export BOOTSTRAP_GENERATE_SSH_KEY
 export BOOTSTRAP_RESTORE_SSH_KEY
 export BOOTSTRAP_INSTALL_PODMAN
-export BOOTSTRAP_INSTALL_BOXES
 export BOOTSTRAP_CONFIGS_ONLY
 
 case "$PLATFORM" in
