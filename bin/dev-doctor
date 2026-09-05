@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -u
+
+ok()   { printf '\033[1;32mok\033[0m    %s\n' "$*"; }
+warn() { printf '\033[1;33mwarn\033[0m  %s\n' "$*"; }
+headr(){ printf '\n\033[1;34m%s\033[0m\n' "$*"; }
+
+if [[ -n "${TERMUX_VERSION:-}" ]] || [[ "${PREFIX:-}" == */com.termux/files/usr ]]; then
+  platform="termux"
+elif [[ -f /etc/debian_version && -d /mnt/shared ]]; then
+  platform="avf"
+else
+  platform="unknown"
+fi
+
+headr "Environment"
+printf 'platform: %s\n' "$platform"
+printf 'user:     %s (%s:%s)\n' "$(id -un)" "$(id -u)" "$(id -g)"
+printf 'home:     %s\n' "$HOME"
+printf 'kernel:   %s\n' "$(uname -srmo)"
+
+headr "Storage"
+if [[ "$platform" == "termux" ]]; then
+  [[ -d "$HOME/storage/shared" ]] && ok "Android shared storage: $HOME/storage/shared" \
+    || warn "Android shared storage missing; run termux-setup-storage"
+elif [[ "$platform" == "avf" ]]; then
+  [[ -d /mnt/shared ]] && ok "Android shared mount: /mnt/shared" \
+    || warn "/mnt/shared is unavailable"
+  free -h 2>/dev/null || true
+fi
+
+headr "Commands"
+for command_name in git ssh tmux nvim micro podman buildah jq rg fd fdfind; do
+  if command -v "$command_name" >/dev/null 2>&1; then
+    ok "$command_name -> $(command -v "$command_name")"
+  else
+    warn "$command_name not installed"
+  fi
+done
+
+headr "Clipboard"
+if command -v termux-clipboard-set >/dev/null 2>&1; then
+  ok "Termux:API command installed (companion app still required)"
+elif [[ -n "${WAYLAND_DISPLAY:-}" ]] && command -v wl-copy >/dev/null 2>&1; then
+  ok "Wayland clipboard via wl-clipboard"
+elif [[ -n "${DISPLAY:-}" ]] && command -v xclip >/dev/null 2>&1; then
+  ok "X11 clipboard via xclip"
+else
+  warn "No CLI clipboard backend active in this session"
+fi
+
+if [[ "$platform" == "avf" ]]; then
+  headr "Rootless Podman"
+  if grep -Eq "^$(id -un):[0-9]+:[0-9]+" /etc/subuid 2>/dev/null; then
+    ok "subuid: $(grep -E "^$(id -un):" /etc/subuid | paste -sd ' ' -)"
+  else
+    warn "No /etc/subuid mapping for $(id -un)"
+  fi
+  if grep -Eq "^$(id -un):[0-9]+:[0-9]+" /etc/subgid 2>/dev/null; then
+    ok "subgid: $(grep -E "^$(id -un):" /etc/subgid | paste -sd ' ' -)"
+  else
+    warn "No /etc/subgid mapping for $(id -un)"
+  fi
+  command -v newuidmap >/dev/null 2>&1 && ok "newuidmap installed" || warn "newuidmap missing"
+  command -v newgidmap >/dev/null 2>&1 && ok "newgidmap installed" || warn "newgidmap missing"
+
+  if command -v podman >/dev/null 2>&1; then
+    if podman info >/dev/null 2>&1; then
+      ok "podman info succeeds"
+      podman info --format 'driver={{.Store.GraphDriverName}} rootless={{.Host.Security.Rootless}}' 2>/dev/null || true
+    else
+      warn "podman is installed but podman info failed"
+    fi
+  fi
+fi

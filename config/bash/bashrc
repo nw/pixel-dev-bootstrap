@@ -1,0 +1,10 @@
+# ~/.bashrc — installed by pixel-dev-bootstrap
+# Edit the source files in the bootstrap repository, then rerun install.sh.
+
+PIXEL_SHELL_ROOT="$HOME/.config/pixel-dev-bootstrap/shell"
+
+[[ -r "$PIXEL_SHELL_ROOT/platform.bash" ]] && . "$PIXEL_SHELL_ROOT/platform.bash"
+[[ -r "$PIXEL_SHELL_ROOT/common.bash" ]] && . "$PIXEL_SHELL_ROOT/common.bash"
+[[ -r "$PIXEL_SHELL_ROOT/podman.bash" ]] && . "$PIXEL_SHELL_ROOT/podman.bash"
+
+unset PIXEL_SHELL_ROOT

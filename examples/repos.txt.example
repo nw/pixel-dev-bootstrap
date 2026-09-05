@@ -1,0 +1,5 @@
+# Keep a human-readable list of canonical repositories here.
+# Clone working trees into ~/src after a reset.
+#
+# git@github.com:example/private-project.git
+# https://github.com/example/public-project.git

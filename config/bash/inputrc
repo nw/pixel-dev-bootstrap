@@ -1,0 +1,8 @@
+set completion-ignore-case on
+set show-all-if-ambiguous on
+set colored-stats on
+set visible-stats on
+
+# Search history using the text already entered at the prompt.
+"\e[A": history-search-backward
+"\e[B": history-search-forward

@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+copy_termux() {
+  if (($#)); then
+    printf '%s' "$*" | termux-clipboard-set
+  else
+    termux-clipboard-set
+  fi
+}
+
+copy_wayland() {
+  if (($#)); then
+    printf '%s' "$*" | wl-copy
+  else
+    wl-copy
+  fi
+}
+
+copy_x11() {
+  if (($#)); then
+    printf '%s' "$*" | xclip -quiet -i -selection clipboard
+  else
+    xclip -quiet -i -selection clipboard
+  fi
+}
+
+if command -v termux-clipboard-set >/dev/null 2>&1; then
+  copy_termux "$@"
+elif [[ -n "${WAYLAND_DISPLAY:-}" ]] && command -v wl-copy >/dev/null 2>&1; then
+  copy_wayland "$@"
+elif [[ -n "${DISPLAY:-}" ]] && command -v xclip >/dev/null 2>&1; then
+  copy_x11 "$@"
+else
+  cat >&2 <<'MSG'
+No system clipboard backend is available.
+
+Termux:
+  Install the matching Termux:API Android app and run: pkg install termux-api
+
+AVF Display:
+  Start a graphical Display session and install wl-clipboard or xclip.
+MSG
+  exit 1
+fi
