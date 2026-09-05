@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.8 — public documentation and support boundary
+
+- Documentation-only release; no runtime, installer, recipe, Podman, or `box` behavior changed.
+- Add a public-facing goals/architecture overview centered on extending the development tether rather than replacing a workstation.
+- Document Termux as the broad Android baseline and Pixel Linux Development Environment / AVF as the primary tested enhanced path.
+- Clarify that AVF is not Pixel-only while keeping other OEM implementations explicitly untested.
+- Make PRoot, rooted/custom-kernel workflows, wake hacks, pet-VM operation, and workstation replacement explicit non-goals.
+- Add the escalation contract: SSH, workstation, and cloud compute are intentional next layers when phone resource/lifecycle limits are reached.
+- Add the "PC disclaimer": a healthy AVF VM should remain cheaper to reconstruct than to repair.
+- Refine the one-line install wording for the public `github.com/nw/pixel-dev-bootstrap` repository.
+- Add matching support/scope language to `docs/AVF.md`.
+
 ## 0.1.7
 
 - Added `bootstrap.sh` as a thin public one-line installer for Termux and Pixel AVF Debian.

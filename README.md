@@ -1,15 +1,76 @@
 # Pixel Dev Bootstrap
 
-One small, reproducible shell setup for both:
+A small, reproducible bootstrap for extending the useful development tether of an Android phone without pretending the phone should replace a workstation.
 
-- **Termux** — instant Android-adjacent shell, SSH, quick scripts, and optional Termux:API integration.
-- **Pixel AVF Debian** — the Linux Development Environment for rootless Podman, builds, containers, and heavier work.
+It supports two complementary surfaces:
 
-The repository installs shared shell behavior while preserving the architectural difference between the two environments.
+- **Termux** — the broad Android baseline: instant shell, SSH, quick scripts, lightweight native tooling, and optional Android integrations.
+- **Pixel AVF Debian** — the enhanced path: Google's Linux Development Environment for rootless Podman, builds, containers, and heavier Linux work.
+
+The project is intentionally narrow. It removes setup and reconstruction friction, preserves the boundary between the two environments, and gives you an explicit escalation path when the phone is no longer the right machine.
+
+## Goals and architecture
+
+The core operating rule is:
+
+> **Persist intent, source, configuration, and artifacts—not machine state.**
+
+The bootstrap optimizes for a few concrete outcomes:
+
+- get to a useful shell quickly;
+- keep AVF cheap to destroy and reconstruct;
+- keep Android-specific integrations explicit and optional;
+- keep heavier AVF workloads in OCI images rather than growing the host;
+- preserve a simple Android-visible reconstruction surface under `/mnt/shared`; and
+- treat SSH, a desktop/laptop, or cloud compute as normal escalation rather than failure.
+
+The architecture is deliberately small:
+
+```text
+Android
+├── Termux
+│   ├── native shell / SSH / lightweight tooling
+│   └── recipe     optional Termux ↔ Android integrations
+│
+├── Linux Development Environment (AVF)
+│   ├── minimal Debian host
+│   ├── Podman     arbitrary/disposable OCI workloads
+│   └── box        named OCI environments + runtime defaults
+│
+└── shared storage
+    └── dev/        reset-resilient definitions, configs, artifacts, bootstrap
+
+SSH / workstation / cloud
+└── escalation when the phone's resource or lifecycle boundary is reached
+```
+
+There is no requirement to use every layer. Termux alone is useful on devices without the tested AVF path. AVF adds capability; it does not replace Termux.
+
+### Support boundary
+
+| Surface | Project stance | Notes |
+| --- | --- | --- |
+| **Termux on Android** | Supported baseline | The broadest path. Plugin/source-signature rules remain Termux's concern; recipes document any companion-app requirements. |
+| **Pixel Linux Development Environment / AVF** | Primary tested enhanced path | Developed and tested on Pixel with Developer options and Linux Development Environment enabled. Google currently exposes this as an experimental developer capability. |
+| **Equivalent AVF/Terminal environments on other Android devices** | May work; untested | AVF is an Android platform capability, not Pixel-only, but OEM exposure and behavior vary. This project does not claim compatibility it has not tested. |
+| **PRoot-based distros** | Out of scope | Valid user choice, but intentionally not another substrate owned by this project. |
+| **Rooted phones / custom kernels / wake hacks** | Out of scope | The bootstrap works with the platform rather than defeating Android's security or battery model. |
+
+### Non-goals
+
+This is **not** an Android development framework, a mobile distro, a package manager, a registry manager, or a project for turning AVF into a long-lived pet server. It does not try to hide the phone's RAM, battery, lifecycle, or permission constraints.
+
+Recipes exist only for optional Termux ↔ Android capabilities. Podman/OCI remains the AVF workload abstraction. `box` is only a thin naming/runtime-default layer over Podman. PRoot remains somebody else's problem.
+
+### The PC disclaimer 😄
+
+If a workload needs long uptime, large memory, persistent services, privileged kernel access, or the AVF VM becomes something you are afraid to reset, **SSH to a devbox or use a laptop/desktop**. The point is to extend the tether, not abolish it.
+
+A healthy AVF environment should remain cheaper to reconstruct than to repair.
 
 ## One-line install
 
-After publishing the repository at `github.com/nw/pixel-dev-bootstrap`, the normal first-run path is:
+From either Termux or the Pixel Linux Development Environment:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nw/pixel-dev-bootstrap/main/bootstrap.sh | bash
