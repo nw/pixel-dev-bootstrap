@@ -12,6 +12,12 @@ pclean() {
   podman system prune "$@"
 }
 
+# Deliberately destructive cleanup for a disposable AVF container store.
+# Removes every unused container, image, volume, and build cache.
+pdeepclean() {
+  podman system prune -a --volumes --build -f
+}
+
 __pm_usage() {
   cat >&2 <<'USAGE'
 usage: pm <image> [directory] [port] [-- command ...]

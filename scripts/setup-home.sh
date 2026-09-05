@@ -34,6 +34,12 @@ install_file "$BOOTSTRAP_ROOT/config/bash/${BOOTSTRAP_PLATFORM}.bash" \
 if [[ "$BOOTSTRAP_PLATFORM" == "avf" ]]; then
   install_file "$BOOTSTRAP_ROOT/config/bash/podman.bash" \
     "$HOME/.config/pixel-dev-bootstrap/shell/podman.bash" 0644
+
+  mkdir -p "$HOME/.config/containers"
+  install_file "$BOOTSTRAP_ROOT/config/containers/containers.conf" \
+    "$HOME/.config/containers/containers.conf" 0644
+  install_file "$BOOTSTRAP_ROOT/config/containers/storage.conf" \
+    "$HOME/.config/containers/storage.conf" 0644
 else
   rm -f -- "$HOME/.config/pixel-dev-bootstrap/shell/podman.bash"
 fi
@@ -54,6 +60,13 @@ for helper in "$local_bin_source"/*; do
   [[ -f "$helper" ]] || continue
   install_file "$helper" "$HOME/bin/$(basename -- "$helper")" 0755
 done
+
+# Debian intentionally ships these commands under collision-safe binary names.
+# Normalize them into ~/bin so shared shell config can use the conventional names.
+if [[ "$BOOTSTRAP_PLATFORM" == "avf" ]]; then
+  [[ -x /usr/bin/fdfind ]] && ln -sf /usr/bin/fdfind "$HOME/bin/fd"
+  [[ -x /usr/bin/batcat ]] && ln -sf /usr/bin/batcat "$HOME/bin/bat"
+fi
 
 say "Configuring SSH and Git defaults"
 install_if_missing "$BOOTSTRAP_ROOT/config/ssh/config" "$HOME/.ssh/config" 0600

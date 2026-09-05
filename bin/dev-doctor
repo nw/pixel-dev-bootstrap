@@ -64,6 +64,18 @@ if [[ "$platform" == "avf" ]]; then
   command -v newuidmap >/dev/null 2>&1 && ok "newuidmap installed" || warn "newuidmap missing"
   command -v newgidmap >/dev/null 2>&1 && ok "newgidmap installed" || warn "newgidmap missing"
 
+  if grep -Eq '^runtime[[:space:]]*=[[:space:]]*"crun"' "$HOME/.config/containers/containers.conf" 2>/dev/null; then
+    ok "containers.conf pins crun"
+  else
+    warn "containers.conf does not pin crun"
+  fi
+  if grep -Eq '^driver[[:space:]]*=[[:space:]]*"overlay"' "$HOME/.config/containers/storage.conf" 2>/dev/null \
+      && grep -Eq 'mount_program[[:space:]]*=[[:space:]]*"/usr/bin/fuse-overlayfs"' "$HOME/.config/containers/storage.conf" 2>/dev/null; then
+    ok "storage.conf pins overlay + fuse-overlayfs"
+  else
+    warn "storage.conf does not pin overlay + fuse-overlayfs"
+  fi
+
   if command -v podman >/dev/null 2>&1; then
     if podman info >/dev/null 2>&1; then
       ok "podman info succeeds"

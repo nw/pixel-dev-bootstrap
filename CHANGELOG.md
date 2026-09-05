@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.1 — 2026-09-01
+
+- Pin AVF rootless Podman to `crun`.
+- Pin container storage to `overlay` via `/usr/bin/fuse-overlayfs`.
+- Normalize Debian `fdfind` and `batcat` into `~/bin/fd` and `~/bin/bat`.
+- Add destructive `pdeepclean` helper for disposable VM cleanup.
+- Extend diagnostics and smoke tests for the explicit Podman substrate.
+
 ## 0.1.0 — 2026-09-01
 
 - Unified auto-detecting installer for Termux and Pixel AVF Debian.

@@ -105,6 +105,7 @@ Changed configuration files are backed up under:
 
 - Bash/XDG baseline, compact prompt, persistent history, completion
 - `eza`, `bat`, `zoxide`, `fd`, `fzf`, `ripgrep` integration when available
+- Debian command-name normalization: `fdfind -> ~/bin/fd`, `batcat -> ~/bin/bat`
 - SSH-agent startup and conservative SSH defaults
 - Git defaults without inventing a name or email
 - tmux baseline
@@ -162,7 +163,22 @@ sudo usermod --add-subgids 100000-165535 "$USER"
 
 It does not overwrite an existing mapping. Run `dev-doctor` to inspect the result.
 
-The installer deliberately does **not** create `~/.config/containers/storage.conf`; Podman can automatically select `fuse-overlayfs` when appropriate, while a premature custom file can interfere with that detection.
+The installer explicitly pins the AVF rootless container substrate for reproducible rebuilds:
+
+```toml
+# ~/.config/containers/containers.conf
+[engine]
+runtime = "crun"
+
+# ~/.config/containers/storage.conf
+[storage]
+driver = "overlay"
+
+[storage.options.overlay]
+mount_program = "/usr/bin/fuse-overlayfs"
+```
+
+This matches the disposable-VM model: `crun` is installed explicitly and rootless storage stays on VM-local overlay via `fuse-overlayfs`. If a VM already has an established Podman store using a different driver, do not expect changing `storage.conf` to migrate that store; inspect or reset it deliberately. Fresh AVF rebuilds are the intended path.
 
 ### Podman shortcuts
 
@@ -174,6 +190,7 @@ ppa                   # all containers
 pv                    # volumes
 pn                    # networks
 pclean                # interactive system prune
+pdeepclean            # remove all unused containers/images/volumes/cache
 ```
 
 `pm` is the small disposable-workload helper:

@@ -72,6 +72,41 @@ Use named Podman volumes for caches or service data when useful, but regard them
 
 Distrobox becomes valuable when a container turns into a persistent interactive toolchain environment with its own home, setup, GUI exports, or repeated integration needs. Until that pattern is visible, plain Podman is cheaper and clearer.
 
+
+## Explicit Podman substrate
+
+The bootstrap pins the rootless runtime and storage backend instead of relying on distro auto-detection:
+
+```toml
+# ~/.config/containers/containers.conf
+[engine]
+runtime = "crun"
+
+# ~/.config/containers/storage.conf
+[storage]
+driver = "overlay"
+
+[storage.options.overlay]
+mount_program = "/usr/bin/fuse-overlayfs"
+```
+
+`crun` and `fuse-overlayfs` are installed with Podman. On a fresh/rebuilt AVF VM this yields a predictable rootless store. If an existing VM has already initialized Podman with another storage driver, changing the file does not migrate old image/container state; keep the old store until done with it or reset deliberately.
+
+Debian packages `fd-find` and `bat` expose `/usr/bin/fdfind` and `/usr/bin/batcat`. The bootstrap creates conventional aliases as real symlinks in `~/bin`:
+
+```text
+~/bin/fd  -> /usr/bin/fdfind
+~/bin/bat -> /usr/bin/batcat
+```
+
+For aggressive cleanup before a VM reset or after disposable experiments:
+
+```bash
+pdeepclean
+```
+
+This runs `podman system prune -a --volumes --build -f`; it intentionally removes all unused images, containers, volumes, and build cache.
+
 ## Clipboard boundary
 
 `wl-clipboard` and `xclip` are installed on a best-effort basis. They operate against graphical session clipboards:

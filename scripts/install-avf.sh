@@ -27,6 +27,7 @@ if [[ "$BOOTSTRAP_CONFIGS_ONLY" != "1" ]]; then
   BASE_PACKAGES=(
     git openssh-client curl wget rsync ca-certificates bash-completion
     jq ripgrep fd-find fzf tmux neovim less file tree patch zip unzip tar man-db
+    bat
     procps iproute2 dnsutils lsof netcat-openbsd socat xdg-utils
     python3 python3-pip python3-venv
     build-essential cmake ninja-build pkg-config
@@ -38,7 +39,6 @@ if [[ "$BOOTSTRAP_CONFIGS_ONLY" != "1" ]]; then
   OPTIONAL_PACKAGES=(
     micro
     eza
-    bat
     zoxide
     gh
     shellcheck

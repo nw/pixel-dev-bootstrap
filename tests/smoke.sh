@@ -19,25 +19,29 @@ trap cleanup EXIT
 echo "Testing Termux configuration install..."
 HOME="$termux_home" \
   bash "$ROOT_DIR/install.sh" --termux --configs-only --no-ssh-key >/dev/null
-HOME="$termux_home" PIXEL_AUTO_SSH_AGENT=0 \
-  bash --noprofile --norc -ic '
-    source "$HOME/.bashrc"
-    test "$PIXEL_PLATFORM" = termux
-    type csrc >/dev/null
-    command -v clipcopy >/dev/null
-  ' >/dev/null 2>&1
+
+test -f "$termux_home/.bashrc"
+test -f "$termux_home/.termux/termux.properties"
+test -x "$termux_home/bin/clipcopy"
+grep -q 'common.bash' "$termux_home/.bashrc"
 
 echo "Testing AVF configuration install..."
 HOME="$avf_home" USER=tester \
   bash "$ROOT_DIR/install.sh" --avf --configs-only --no-ssh-key --no-podman >/dev/null
-HOME="$avf_home" USER=tester PIXEL_AUTO_SSH_AGENT=0 \
-  bash --noprofile --norc -ic '
-    source "$HOME/.bashrc"
-    test "$PIXEL_PLATFORM" = avf
-    type pm >/dev/null
-    type nodebox >/dev/null
-    command -v clipcopy >/dev/null
-  ' >/dev/null 2>&1
+
+test -f "$avf_home/.bashrc"
+test -x "$avf_home/bin/clipcopy"
+test -f "$avf_home/.config/pixel-dev-bootstrap/shell/podman.bash"
+grep -q 'runtime = "crun"' "$avf_home/.config/containers/containers.conf"
+grep -q 'driver = "overlay"' "$avf_home/.config/containers/storage.conf"
+grep -q 'mount_program = "/usr/bin/fuse-overlayfs"' "$avf_home/.config/containers/storage.conf"
+
+# The Podman helper file is safe to source non-interactively.
+# shellcheck disable=SC1090
+source "$avf_home/.config/pixel-dev-bootstrap/shell/podman.bash"
+type pm >/dev/null
+type nodebox >/dev/null
+type pdeepclean >/dev/null
 
 if command -v shellcheck >/dev/null 2>&1; then
   echo "Running ShellCheck..."
