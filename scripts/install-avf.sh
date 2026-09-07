@@ -74,6 +74,7 @@ if [[ -d /mnt/shared && -w /mnt/shared ]]; then
   mkdir -p \
     /mnt/shared/dev/artifacts \
     /mnt/shared/dev/configs \
+    /mnt/shared/dev/configs/avf/home \
     /mnt/shared/dev/configs/boxes.d \
     /mnt/shared/dev/containers/compose \
     /mnt/shared/dev/exports
@@ -192,6 +193,7 @@ Next:
 
 Operating model:
   /mnt/shared/dev   reset-resilient seed/config/artifact interchange
+  avf-sync          optional user-owned home overlay reconstruction
   ~/src             disposable VM-local working trees
   Podman            disposable or named workload state
 

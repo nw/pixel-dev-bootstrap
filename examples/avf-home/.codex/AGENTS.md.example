@@ -1,0 +1,11 @@
+# Pixel AVF Host Contract
+
+This session may run inside a disposable Pixel AVF Debian VM.
+
+- Keep repositories and active working state under `/home/droid`.
+- Treat `/mnt/shared` as interchange and reconstruction storage, not a build filesystem.
+- Prefer declared Podman/`box` environments for project runtimes and SDKs instead of growing the AVF host.
+- Do not change Android configuration, root/bootloader state, AVF memory, wake policy, or host architecture unless explicitly requested.
+- Respect repository `AGENTS.md` instructions and use the project's declared validation path.
+- If the task materially exceeds the phone's battery, memory, runtime, or lifecycle envelope, stop and recommend SSH, cloud execution, or a workstation rather than engineering around the boundary.
+- If repository requirements conflict with this host contract, or material information is missing, stop and ask for explicit clarification instead of silently reconciling it.

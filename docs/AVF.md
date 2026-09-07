@@ -11,6 +11,7 @@ The VM is burst capability, not a pet workstation. If it becomes expensive to re
   pixel-dev-bootstrap/   reset-resilient reconstruction copy
   artifacts/             results Android should see
   configs/               non-secret portable configuration
+    avf/home/             user-owned AVF home overlay
   containers/            Containerfiles and compose definitions
   exports/               deliberate outbound files
 
@@ -30,6 +31,37 @@ source and important reconstruction metadata in Git/remotes or another external
 backup; use `/mnt/shared/dev` as an offline reset-resilient cache.
 
 Do not use `/mnt/shared` as the primary home for repositories, package trees, build directories, databases, or container storage. Export meaningful outputs there deliberately.
+
+## Durable AVF home overlay
+
+Host-level customization that should survive a VM reset can live under:
+
+```text
+$DEV_SHARED/configs/avf/home/
+```
+
+The tree mirrors `$HOME`. Apply it explicitly with:
+
+```bash
+avf-sync --dry-run
+avf-sync
+```
+
+This is intentionally not a package or lifecycle system. It copies files into the
+normal AVF home, does not delete unrelated files, and never installs dependencies.
+Files placed under `home/bin/` are made executable after the copy. Common secret
+locations are excluded; keep credentials VM-local or use dedicated recovery tools.
+
+The bootstrap ships a small host-boundary example for agent workflows:
+
+```text
+examples/avf-home/.codex/AGENTS.md.example
+```
+
+Copy it into the durable overlay as `.codex/AGENTS.md`, run `avf-sync`, and Codex
+can consume a VM-local host contract without putting personal agent configuration
+inside the public bootstrap. Repository-level `AGENTS.md` files should carry the
+project-specific rules.
 
 ### Promote voice notes into a project
 

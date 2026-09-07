@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.10 — durable AVF home overlay
+
+- Add AVF-only `avf-sync` for copying a user-owned, reset-resilient home overlay from `$DEV_SHARED/configs/avf/home/` into the disposable VM home.
+- Keep the overlay intentionally dumb: no package lifecycle, hooks, profiles, deletion semantics, or secret ownership; `--dry-run` is the only control surface.
+- Never delete unrelated AVF home files and exclude common credential locations such as `.ssh`, `.gnupg`, registry auth, and Codex auth from the shared-storage overlay.
+- Normalize copied overlay files to normal private-filesystem permissions and make files deliberately placed under `home/bin/` executable after sync.
+- Seed the durable AVF overlay directory during AVF setup.
+- Add a small Pixel AVF `AGENTS.md` example showing host boundaries for Codex/agent workflows without automatically imposing it on users.
+- Document the customization boundary: public bootstrap substrate, user-owned AVF overlay, Termux recipes for Android integration, OCI/`box` for AVF workloads, and remotes/registries for canonical durability.
+- Extend smoke coverage for AVF-only installation, dry-run behavior, overlay copying, executable helpers, secret exclusions, and non-destructive home semantics.
+
 ## 0.1.9 — launcher capture, AVF note promotion, and public repo hygiene
 
 - Add a recipe-owned foreground `~/.shortcuts/vnote` launcher/widget entry so voice capture can start directly from Android.

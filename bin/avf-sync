@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: avf-sync [--dry-run]
+
+Copy the user-owned durable AVF home overlay from:
+  $DEV_SHARED/configs/avf/home/
+into:
+  $HOME/
+
+The overlay never deletes unrelated home files. Shared-storage permissions are
+not trusted; regular files are copied as 0644 and files under home/bin are made
+user-executable after sync.
+
+Likely-secret paths are always excluded. Keep credentials in AVF-private state
+or use purpose-built recovery such as ssh-seal.
+USAGE
+}
+
+dry_run=0
+while (($#)); do
+  case "$1" in
+    --dry-run|-n) dry_run=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) printf 'avf-sync: unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+if [[ -n "${TERMUX_VERSION:-}" ]]; then
+  printf 'avf-sync: AVF-only helper; use it from the Debian VM\n' >&2
+  exit 2
+fi
+
+command -v rsync >/dev/null 2>&1 || {
+  printf 'avf-sync: rsync is required\n' >&2
+  exit 127
+}
+
+shared_root="${DEV_SHARED:-/mnt/shared/dev}"
+source_root="${AVF_SYNC_SOURCE:-$shared_root/configs/avf/home}"
+
+if [[ ! -d "$source_root" ]]; then
+  printf 'avf-sync: overlay does not exist: %s\n' "$source_root" >&2
+  printf 'Create it and mirror paths relative to $HOME, for example:\n' >&2
+  printf '  %s/.codex/AGENTS.md\n' "$source_root" >&2
+  exit 1
+fi
+
+# Durable shared storage is intentionally not a secret store. These exclusions
+# also prevent an accidental whole-home copy from moving common credential state
+# into Android-visible storage and back again.
+excludes=(
+  '.ssh/***'
+  '.gnupg/***'
+  '.aws/***'
+  '.kube/***'
+  '.docker/***'
+  '.password-store/***'
+  '.config/gh/***'
+  '.config/gcloud/***'
+  '.config/containers/auth.json'
+  '.codex/auth.json'
+)
+
+rsync_args=(
+  -rlt
+  --itemize-changes
+  --no-perms
+  --no-owner
+  --no-group
+  --chmod='Du=rwx,Dgo=rx,Fu=rw,Fgo=r'
+)
+
+for pattern in "${excludes[@]}"; do
+  rsync_args+=(--exclude "$pattern")
+done
+
+if ((dry_run)); then
+  rsync_args+=(--dry-run)
+  printf 'AVF overlay dry run: %s -> %s\n' "$source_root" "$HOME"
+else
+  printf 'Syncing AVF overlay: %s -> %s\n' "$source_root" "$HOME"
+fi
+
+rsync "${rsync_args[@]}" -- "$source_root/" "$HOME/"
+
+if ((!dry_run)) && [[ -d "$source_root/bin" ]]; then
+  # Android shared storage does not provide reliable executable-mode semantics.
+  # A file deliberately placed under the overlay's bin/ directory is therefore
+  # treated as an executable tool after it lands on the normal AVF filesystem.
+  while IFS= read -r -d '' source_file; do
+    relative="${source_file#"$source_root/"}"
+    target="$HOME/$relative"
+    [[ -f "$target" ]] && chmod u+x -- "$target"
+  done < <(find "$source_root/bin" -type f -print0)
+fi

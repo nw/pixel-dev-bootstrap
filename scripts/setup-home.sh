@@ -79,6 +79,10 @@ for helper in "$local_bin_source"/*; do
     rm -f -- "$HOME/bin/box"
     continue
   fi
+  if [[ "$helper_name" == "avf-sync" && "$BOOTSTRAP_PLATFORM" != "avf" ]]; then
+    rm -f -- "$HOME/bin/avf-sync"
+    continue
+  fi
   install_file "$helper" "$HOME/bin/$helper_name" 0755
 done
 unset helper_name

@@ -21,6 +21,7 @@ The bootstrap optimizes for a few concrete outcomes:
 - keep AVF cheap to destroy and reconstruct;
 - keep Android-specific integrations explicit and optional;
 - keep heavier AVF workloads in OCI images rather than growing the host;
+- keep user-owned AVF host customization durable without folding it into the public bootstrap;
 - preserve a simple Android-visible reconstruction surface under `/mnt/shared`; and
 - treat SSH, a desktop/laptop, or cloud compute as normal escalation rather than failure.
 
@@ -34,11 +35,14 @@ Android
 │
 ├── Linux Development Environment (AVF)
 │   ├── minimal Debian host
+│   ├── avf-sync   user-owned durable home overlay -> disposable VM home
 │   ├── Podman     arbitrary/disposable OCI workloads
 │   └── box        named OCI environments + runtime defaults
 │
 └── shared storage
-    └── dev/        reset-resilient definitions, configs, artifacts, bootstrap
+    └── dev/
+        ├── configs/avf/home/   reset-resilient AVF host overlay
+        └── ...                 definitions, configs, artifacts, bootstrap
 
 SSH / workstation / cloud
 └── escalation when the phone's resource or lifecycle boundary is reached
@@ -127,6 +131,7 @@ Android shared storage
     ├── pixel-dev-bootstrap/    # reset-resilient offline reconstruction copy
     ├── artifacts/
     ├── configs/
+    │   └── avf/home/           # user-owned AVF home overlay
     ├── containers/
     └── exports/
 
@@ -244,7 +249,7 @@ The newest 10 backup runs are retained by default. Override with
 - tmux baseline
 - small Neovim configuration
 - `clipcopy`, `clippaste`, `dev-doctor`, and `reseed`
-- platform-specific helper: `recipe` on Termux, `box` on AVF
+- platform-specific helpers: `recipe` on Termux; `box` and `avf-sync` on AVF
 
 The installer copies modular source files into:
 
@@ -383,6 +388,66 @@ export VNOTE_MODE=auto     # auto | native | local
 ```
 
 See [`recipes/vnote/README.md`](recipes/vnote/README.md).
+
+### AVF durable home overlay
+
+The public bootstrap should not have to own every personal host-level preference.
+AVF therefore has one deliberately dumb customization seam:
+
+```text
+$DEV_SHARED/configs/avf/home/
+```
+
+Paths below that directory mirror paths below `$HOME`. For example:
+
+```text
+/mnt/shared/dev/configs/avf/home/
+├── .codex/
+│   └── AGENTS.md
+├── .config/
+│   └── some-tool/config.toml
+└── bin/
+    └── my-helper
+```
+
+Preview and apply it with:
+
+```bash
+avf-sync --dry-run
+avf-sync
+```
+
+`avf-sync` is **copy-only**: it never deletes unrelated files from the VM home.
+Matching overlay paths intentionally win when copied. It does not install packages,
+run lifecycle hooks, create profiles, or become another recipe system. Files under
+`home/bin/` are made user-executable after landing on the normal AVF filesystem,
+because Android shared storage is not trusted to preserve executable-mode intent.
+
+The overlay is for non-secret host configuration and small durable tools. Common
+credential locations (`.ssh`, `.gnupg`, registry auth, Codex auth, and similar) are
+excluded on purpose. Keep secrets in AVF-private state or use a purpose-built
+recovery path such as `ssh-seal`. Project runtimes still belong in OCI images, and
+Git/remotes remain the real durability layer beyond the device.
+
+A small agent-host example is included at:
+
+```text
+examples/avf-home/.codex/AGENTS.md.example
+```
+
+To adopt it as a durable Codex host contract:
+
+```bash
+mkdir -p /mnt/shared/dev/configs/avf/home/.codex
+cp /mnt/shared/dev/pixel-dev-bootstrap/examples/avf-home/.codex/AGENTS.md.example \
+  /mnt/shared/dev/configs/avf/home/.codex/AGENTS.md
+avf-sync
+```
+
+That creates a normal VM-local `~/.codex/AGENTS.md` while keeping the source in
+the reset-resilient overlay. Repository `AGENTS.md` files remain the place for
+project-specific constraints; the example is intentionally only about the Pixel
+AVF host boundary.
 
 ### AVF Debian role
 
@@ -723,6 +788,7 @@ After an AVF reset, the intended recovery path is roughly:
 ```bash
 bash /mnt/shared/dev/pixel-dev-bootstrap/install.sh
 source ~/.bashrc
+avf-sync       # optional user-owned host overlay
 dev-doctor
 ```
 

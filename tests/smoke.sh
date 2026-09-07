@@ -67,6 +67,7 @@ test -x "$termux_home/bin/reseed"
 test -x "$termux_home/bin/ssh-seal"
 test -x "$termux_home/bin/recipe"
 test ! -e "$termux_home/bin/box"
+test ! -e "$termux_home/bin/avf-sync"
 test -f "$termux_home/.local/share/pixel-dev-bootstrap/recipe-catalog/vnote/recipe.sh"
 test ! -e "$termux_home/.local/share/pixel-dev-bootstrap/recipes/vnote"
 test ! -e "$termux_home/bin/vnote"
@@ -117,12 +118,40 @@ test -x "$avf_home/bin/reseed"
 test -x "$avf_home/bin/ssh-restore"
 test ! -e "$avf_home/bin/recipe"
 test -x "$avf_home/bin/box"
+test -x "$avf_home/bin/avf-sync"
 test ! -e "$avf_home/.local/share/pixel-dev-bootstrap/recipe-catalog"
 test -f "$avf_home/.config/pixel-dev-bootstrap/shell/podman.bash"
 test ! -e "$avf_home/.config/pixel-dev-bootstrap/shell/boxes.bash"
 grep -q 'runtime = "crun"' "$avf_home/.config/containers/containers.conf"
 grep -q 'driver = "overlay"' "$avf_home/.config/containers/storage.conf"
 grep -q 'mount_program = "/usr/bin/fuse-overlayfs"' "$avf_home/.config/containers/storage.conf"
+
+printf 'Testing AVF durable home overlay...\n'
+avf_overlay_shared="$test_root/avf-overlay-shared"
+avf_overlay="$avf_overlay_shared/configs/avf/home"
+mkdir -p \
+  "$avf_overlay/.codex" \
+  "$avf_overlay/.config/example" \
+  "$avf_overlay/bin" \
+  "$avf_overlay/.ssh"
+printf 'host contract\n' > "$avf_overlay/.codex/AGENTS.md"
+printf 'local config\n' > "$avf_overlay/.config/example/config"
+printf '#!/usr/bin/env bash\nprintf "overlay tool\\n"\n' > "$avf_overlay/bin/overlay-tool"
+chmod 0644 "$avf_overlay/bin/overlay-tool"
+printf 'must not copy\n' > "$avf_overlay/.ssh/id_ed25519"
+printf 'preserve me\n' > "$avf_home/unrelated.txt"
+
+HOME="$avf_home" DEV_SHARED="$avf_overlay_shared" \
+  "$avf_home/bin/avf-sync" --dry-run >/dev/null
+test ! -e "$avf_home/.codex/AGENTS.md"
+
+HOME="$avf_home" DEV_SHARED="$avf_overlay_shared" \
+  "$avf_home/bin/avf-sync" >/dev/null
+grep -qx 'host contract' "$avf_home/.codex/AGENTS.md"
+grep -qx 'local config' "$avf_home/.config/example/config"
+test -x "$avf_home/bin/overlay-tool"
+test ! -e "$avf_home/.ssh/id_ed25519"
+grep -qx 'preserve me' "$avf_home/unrelated.txt"
 
 # Shared voice scratch state should be promoted into AVF project state only by
 # explicit copy, with parent creation and no silent overwrite.
