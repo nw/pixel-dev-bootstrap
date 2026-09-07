@@ -9,6 +9,26 @@ It supports two complementary surfaces:
 
 The project is intentionally narrow. It removes setup and reconstruction friction, preserves the boundary between the two environments, and gives you an explicit escalation path when the phone is no longer the right machine.
 
+## Start here
+
+Install from Termux or the Pixel Linux Development Environment:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nw/pixel-dev-bootstrap/main/bootstrap.sh | bash
+```
+
+Then:
+
+```bash
+source ~/.bashrc
+dev-doctor
+```
+
+For the folder map, environment boundary, recovery cadence, and a compact
+reference for every command this project introduces, see
+**[docs/quickstart.md](docs/quickstart.md)**.
+
+
 ## Goals and architecture
 
 The core operating rule is:
@@ -72,7 +92,7 @@ If a workload needs long uptime, large memory, persistent services, privileged k
 
 A healthy AVF environment should remain cheaper to reconstruct than to repair.
 
-## One-line install
+## Installation details
 
 From either Termux or the Pixel Linux Development Environment:
 
@@ -166,7 +186,7 @@ VM reset, but a lost, wiped, or dead phone takes it with the device. Treat:
 This distinction is intentional: AVF rebuilds should be cheap without pretending
 shared phone storage is a complete backup strategy.
 
-## Quick start
+## Manual/local install
 
 Place or unzip this folder somewhere both environments can reach. The clean reset-resilient device-local location is:
 

@@ -1,5 +1,7 @@
 # AVF Debian operating notes
 
+Operational command reference: [Quick start and command reference](quickstart.md).
+
 > **Support scope:** these notes describe Google's Linux Development Environment as tested on Pixel. AVF itself is an Android platform capability and may appear on other devices, but OEM-specific Terminal/VM behavior is outside this project's tested support boundary. The upstream feature is experimental; Developer options are part of the current setup contract.
 
 The VM is burst capability, not a pet workstation. If it becomes expensive to reset, move durable state outward or escalate the workload to another machine.

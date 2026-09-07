@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.11 — quick start and command reference
+
+- Documentation-only release; runtime, installer, recipe, Podman, `box`, and AVF overlay behavior are unchanged.
+- Add `docs/quickstart.md` as the compact operational reference: architecture boundary, folder map, reset cadence, and the command surface introduced by the project.
+- Document the optional pattern of keeping `/mnt/shared/dev` as a tiny user-owned Git control plane while leaving the public bootstrap checkout and transient artifacts untracked.
+- Add a top-level README start shim with the one-line install, immediate health check, and direct Quick Start link.
+- Rename the deeper README install sections to distinguish public one-line setup from manual/local installation.
+
 ## 0.1.10 — durable AVF home overlay
 
 - Add AVF-only `avf-sync` for copying a user-owned, reset-resilient home overlay from `$DEV_SHARED/configs/avf/home/` into the disposable VM home.
