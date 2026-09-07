@@ -55,6 +55,8 @@ The paths look the same but are separate checkouts. Shared storage is created fo
 The bootstrap installs the substrate only. Recipes, registry authentication,
 box images and project workloads remain explicit.
 
+On a brand-new AVF VM, the Android-backed `/mnt/shared` mount can appear before it is ready for writes. The bootstrap probes `/mnt/shared/dev` and waits briefly for it to become usable; no Termux prerequisite or Downloads fallback is required.
+
 ## Folder map
 
 ```text

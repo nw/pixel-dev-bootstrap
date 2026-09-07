@@ -19,6 +19,38 @@ as_root() {
   fi
 }
 
+shared_storage_ready() {
+  local root="$1"
+  local dev_root="$root/dev"
+  local probe="$dev_root/.pixel-dev-bootstrap-write-test.$$"
+
+  [[ -d "$root" ]] || return 1
+  mkdir -p "$dev_root" 2>/dev/null || return 1
+
+  if ! (umask 077; : > "$probe") 2>/dev/null; then
+    return 1
+  fi
+
+  if ! rm -f -- "$probe" 2>/dev/null; then
+    return 1
+  fi
+
+  return 0
+}
+
+wait_for_shared_storage() {
+  local root="$1"
+  local attempts="${2:-30}"
+  local attempt
+
+  for ((attempt=0; attempt<attempts; attempt++)); do
+    shared_storage_ready "$root" && return 0
+    sleep 1
+  done
+
+  return 1
+}
+
 PLATFORM=""
 SHARED_ROOT=""
 
@@ -50,7 +82,14 @@ if [[ -n "${TERMUX_VERSION:-}" ]] || [[ "${PREFIX:-}" == */com.termux/files/usr 
   fi
 elif [[ -f /etc/debian_version && -d /mnt/shared ]]; then
   PLATFORM="avf"
-  [[ -w /mnt/shared ]] || die "/mnt/shared is not writable"
+
+  if ! shared_storage_ready /mnt/shared; then
+    say "Waiting for Android shared storage"
+    info "Fresh AVF mounts can take a moment to become writable."
+    wait_for_shared_storage /mnt/shared 30 || \
+      die "/mnt/shared/dev did not become writable within 30 seconds"
+  fi
+
   SHARED_ROOT="/mnt/shared"
 
   if ! command -v git >/dev/null 2>&1; then

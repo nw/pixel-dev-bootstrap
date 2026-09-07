@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.13 — fresh AVF shared-storage readiness
+
+- Fix the one-line bootstrap on a freshly created AVF VM when `/mnt/shared` is visible before the Android-backed mount is fully ready for writes.
+- Replace the one-shot `[[ -w /mnt/shared ]]` check with an operational probe that creates `/mnt/shared/dev`, writes a private test file, removes it, and retries for up to 30 seconds.
+- Keep `/mnt/shared/dev` as the canonical AVF ↔ Android interchange path; no Downloads fallback or Termux prerequisite is introduced.
+- Add smoke coverage for the mount-readiness race so the bootstrap must recover when the shared path initially rejects `dev/` creation and becomes usable shortly afterward.
+- Document the fresh-VM readiness behavior in the AVF notes and Quick Start.
+
 ## 0.1.12 — private bootstrap checkout on Termux and AVF
 
 - Fix the public one-line bootstrap after a clean Termux install by moving the Git checkout off Android shared storage.

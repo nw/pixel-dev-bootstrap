@@ -35,6 +35,12 @@ backup; use `/mnt/shared/dev` as an offline reset-resilient cache.
 
 Do not use `/mnt/shared` as the primary home for repositories—including the bootstrap checkout—package trees, build directories, databases, or container storage. Keep Git metadata on a private Unix filesystem and export meaningful outputs there deliberately.
 
+### Fresh VM mount readiness
+
+On a newly created AVF VM, `/mnt/shared` can become visible before the Android-backed mount is fully ready for writes. The public `bootstrap.sh` probes the actual capability it needs—create `/mnt/shared/dev`, write and remove a test file—and waits for up to 30 seconds rather than trusting mount permission metadata alone.
+
+If that probe still fails after the retry window, confirm the Terminal app can create a file under `/mnt/shared` before retrying the bootstrap.
+
 ## Durable AVF home overlay
 
 Host-level customization that should survive a VM reset can live under:

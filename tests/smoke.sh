@@ -59,6 +59,46 @@ test -d "$remote_checkout/.git"
 test -f "$remote_checkout/install.sh"
 grep -qx -- '--no-upgrade' "$remote_log"
 
+printf 'Testing fresh AVF shared-storage readiness retry...\n'
+avf_remote_home="$test_root/avf-remote-home"
+avf_shared="$test_root/avf-shared"
+avf_marker="$test_root/avf-debian-version"
+avf_bootstrap="$test_root/bootstrap-avf-test.sh"
+avf_log="$test_root/avf-remote-install.log"
+mkdir -p "$avf_remote_home" "$avf_shared"
+touch "$avf_marker"
+
+# Simulate a fresh AVF mount that is visible but not yet usable for the dev root:
+# a blocking regular file makes mkdir -p <shared>/dev fail until the background
+# transition replaces it with a directory. This avoids depending on chmod/root
+# semantics in the environment running the smoke test.
+printf 'not-ready\n' > "$avf_shared/dev"
+
+sed \
+  -e "s|/etc/debian_version|$avf_marker|g" \
+  -e "s|/mnt/shared|$avf_shared|g" \
+  "$ROOT_DIR/bootstrap.sh" > "$avf_bootstrap"
+chmod +x "$avf_bootstrap"
+
+(
+  sleep 1
+  rm -f -- "$avf_shared/dev"
+  mkdir -p "$avf_shared/dev"
+) &
+avf_mount_transition_pid=$!
+
+TERMUX_VERSION= PREFIX=/usr \
+  HOME="$avf_remote_home" PATH="$remote_bin:$PATH" \
+  REMOTE_INSTALL_LOG="$avf_log" \
+  bash "$avf_bootstrap" --no-upgrade >/dev/null
+wait "$avf_mount_transition_pid"
+
+avf_remote_checkout="$avf_remote_home/.local/share/pixel-dev-bootstrap/source"
+test -d "$avf_shared/dev"
+test -d "$avf_remote_checkout/.git"
+test -f "$avf_remote_checkout/install.sh"
+grep -qx -- '--no-upgrade' "$avf_log"
+
 printf 'Testing Termux configuration install...\n'
 HOME="$termux_home" \
   bash "$ROOT_DIR/install.sh" --termux --configs-only --no-ssh-key >/dev/null
