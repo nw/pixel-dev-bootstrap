@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 REPO_URL="${PIXEL_DEV_BOOTSTRAP_REPO:-https://github.com/nw/pixel-dev-bootstrap.git}"
 REPO_REF="${PIXEL_DEV_BOOTSTRAP_REF:-main}"
-REPO_NAME="pixel-dev-bootstrap"
 
 say()  { printf '\n\033[1;34m==>\033[0m %s\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
@@ -64,8 +63,8 @@ else
 fi
 
 DEV_ROOT="$SHARED_ROOT/dev"
-REPO_DIR="$DEV_ROOT/$REPO_NAME"
-mkdir -p "$DEV_ROOT"
+REPO_DIR="$HOME/.local/share/pixel-dev-bootstrap/source"
+mkdir -p "$DEV_ROOT" "$(dirname -- "$REPO_DIR")"
 
 say "Preparing pixel-dev-bootstrap"
 info "platform: $PLATFORM"
@@ -77,7 +76,6 @@ fi
 
 if [[ ! -d "$REPO_DIR/.git" ]]; then
   git clone --branch "$REPO_REF" "$REPO_URL" "$REPO_DIR"
-  git -C "$REPO_DIR" config core.fileMode false
 else
   current_origin="$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null || true)"
   if [[ -n "$current_origin" && "$current_origin" != "$REPO_URL" ]]; then

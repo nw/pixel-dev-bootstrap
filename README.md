@@ -62,7 +62,7 @@ Android
 └── shared storage
     └── dev/
         ├── configs/avf/home/   reset-resilient AVF host overlay
-        └── ...                 definitions, configs, artifacts, bootstrap
+        └── ...                 definitions, configs, artifacts
 
 SSH / workstation / cloud
 └── escalation when the phone's resource or lifecycle boundary is reached
@@ -106,17 +106,24 @@ The remote entrypoint is intentionally thin. It:
 2. enables/checks Android shared storage;
 3. creates the shared `dev/` root;
 4. installs Git only when it is missing;
-5. clones the repository into the canonical device-local path; and
+5. clones or updates the bootstrap on the environment's **private Unix filesystem**; and
 6. hands control to the repository's normal `install.sh`.
 
-The resulting checkout is the **same physical Android shared-storage directory** from both environments:
+Each environment therefore has its own disposable bootstrap checkout:
 
 ```text
-Termux: ~/storage/shared/dev/pixel-dev-bootstrap
-AVF:    /mnt/shared/dev/pixel-dev-bootstrap
+Termux: ~/.local/share/pixel-dev-bootstrap/source
+AVF:    ~/.local/share/pixel-dev-bootstrap/source
 ```
 
-Rerunning the one-liner fast-forwards a clean existing checkout. If the checkout has local changes, bootstrap preserves them and skips the automatic update rather than overwriting work.
+Those are separate filesystems despite the matching logical path. The Android
+shared `dev/` tree is deliberately **not** a Git checkout. Shared storage remains
+only the reset-resilient interchange/reconstruction surface.
+
+Rerunning the one-liner fast-forwards a clean private checkout. If that checkout
+has local changes, bootstrap preserves them and skips the automatic update rather
+than overwriting work. A Termux uninstall or AVF reset may destroy its respective
+checkout; rerunning the one-liner recreates it from GitHub.
 
 Pass normal installer options through the one-liner with `bash -s --`:
 
@@ -141,14 +148,14 @@ less /tmp/pixel-dev-bootstrap.sh
 bash /tmp/pixel-dev-bootstrap.sh
 ```
 
-The one-line bootstrap establishes the repository and substrate only. It does not install recipes, box images, registry credentials, or project-specific workloads.
+The one-line bootstrap establishes the repository and substrate only. It does not
+install recipes, box images, registry credentials, or project-specific workloads.
 
 ## Working model
 
 ```text
 Android shared storage
 └── dev/
-    ├── pixel-dev-bootstrap/    # reset-resilient offline reconstruction copy
     ├── artifacts/
     ├── configs/
     │   └── avf/home/           # user-owned AVF home overlay
@@ -156,10 +163,14 @@ Android shared storage
     └── exports/
 
 Termux private home
-└── ~/src                      # native Termux repos/work
+├── ~/.local/share/pixel-dev-bootstrap/source
+│                               # disposable upstream bootstrap checkout
+└── ~/src                       # native Termux repos/work
 
 AVF Debian private disk
-└── /home/droid/src            # disposable VM-local repos/work
+├── ~/.local/share/pixel-dev-bootstrap/source
+│                               # disposable upstream bootstrap checkout
+└── /home/droid/src             # disposable VM-local repos/work
 ```
 
 The same Android directory is normally visible as:
@@ -169,7 +180,7 @@ Termux:    ~/storage/shared/dev
 AVF:       /mnt/shared/dev
 ```
 
-Treat shared storage as the **loading dock and reconstruction surface**. Keep Git working trees, build trees, `node_modules`, container stores, databases, and symlink-heavy state in each environment's normal private Linux filesystem.
+Treat shared storage as the **loading dock and reconstruction surface**. Keep Git working trees—including the bootstrap checkout and any personal configuration repository—build trees, `node_modules`, container stores, databases, and symlink-heavy state in each environment's normal private Linux filesystem.
 
 > Persist intent, source, configuration, and artifacts—not machine state.
 
@@ -188,7 +199,9 @@ shared phone storage is a complete backup strategy.
 
 ## Manual/local install
 
-Place or unzip this folder somewhere both environments can reach. The clean reset-resilient device-local location is:
+An unpacked release archive can be run from any readable location, including Android shared storage. That is safe because it is static input, not a Git working tree. Do not initialize or maintain the repository's `.git` metadata on shared storage.
+
+For example, an unpacked archive may temporarily live at:
 
 ```text
 Android internal storage/dev/pixel-dev-bootstrap
@@ -459,7 +472,7 @@ To adopt it as a durable Codex host contract:
 
 ```bash
 mkdir -p /mnt/shared/dev/configs/avf/home/.codex
-cp /mnt/shared/dev/pixel-dev-bootstrap/examples/avf-home/.codex/AGENTS.md.example \
+cp ~/.local/share/pixel-dev-bootstrap/source/examples/avf-home/.codex/AGENTS.md.example \
   /mnt/shared/dev/configs/avf/home/.codex/AGENTS.md
 avf-sync
 ```
@@ -793,7 +806,8 @@ $DEV_SHARED/configs/ssh/id_ed25519.age
 After an AVF reset, reconstruct and restore in one pass:
 
 ```bash
-bash /mnt/shared/dev/pixel-dev-bootstrap/install.sh --restore-ssh-key
+curl -fsSL https://raw.githubusercontent.com/nw/pixel-dev-bootstrap/main/bootstrap.sh | \
+  bash -s -- --restore-ssh-key
 ```
 
 The installer prompts through `age`, recreates the public key from the restored
@@ -806,7 +820,7 @@ only device-local unless separately backed up.
 After an AVF reset, the intended recovery path is roughly:
 
 ```bash
-bash /mnt/shared/dev/pixel-dev-bootstrap/install.sh
+curl -fsSL https://raw.githubusercontent.com/nw/pixel-dev-bootstrap/main/bootstrap.sh | bash
 source ~/.bashrc
 avf-sync       # optional user-owned host overlay
 dev-doctor

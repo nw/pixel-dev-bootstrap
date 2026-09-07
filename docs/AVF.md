@@ -10,7 +10,6 @@ The VM is burst capability, not a pet workstation. If it becomes expensive to re
 
 ```text
 /mnt/shared/dev/
-  pixel-dev-bootstrap/   reset-resilient reconstruction copy
   artifacts/             results Android should see
   configs/               non-secret portable configuration
     avf/home/             user-owned AVF home overlay
@@ -18,6 +17,8 @@ The VM is burst capability, not a pet workstation. If it becomes expensive to re
   exports/               deliberate outbound files
 
 /home/droid/
+  .local/share/pixel-dev-bootstrap/source
+                         disposable upstream bootstrap checkout
   src/                   Git working trees
   scratch/               experiments
   bin/                   local helpers
@@ -32,7 +33,7 @@ layer. A phone wipe, loss, or storage failure removes it too. Keep canonical
 source and important reconstruction metadata in Git/remotes or another external
 backup; use `/mnt/shared/dev` as an offline reset-resilient cache.
 
-Do not use `/mnt/shared` as the primary home for repositories, package trees, build directories, databases, or container storage. Export meaningful outputs there deliberately.
+Do not use `/mnt/shared` as the primary home for repositories—including the bootstrap checkout—package trees, build directories, databases, or container storage. Keep Git metadata on a private Unix filesystem and export meaningful outputs there deliberately.
 
 ## Durable AVF home overlay
 

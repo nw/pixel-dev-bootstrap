@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.12 — private bootstrap checkout on Termux and AVF
+
+- Fix the public one-line bootstrap after a clean Termux install by moving the Git checkout off Android shared storage.
+- Keep one disposable upstream checkout per environment at `~/.local/share/pixel-dev-bootstrap/source`; Termux and AVF no longer share Git metadata.
+- Continue creating `$DEV_SHARED` as the explicit Android ↔ Linux reconstruction/interchange surface, but never use it as the bootstrap Git working tree.
+- Remove the shared-storage `core.fileMode` workaround; the checkout now has normal private Unix filesystem semantics.
+- Update smoke coverage to require a private checkout and verify that the shared `dev/` root remains checkout-free.
+- Correct README, Quick Start, AVF notes, recovery examples, and the personal-versioning guidance so Git metadata is kept off shared storage.
+
 ## 0.1.11 — quick start and command reference
 
 - Documentation-only release; runtime, installer, recipe, Podman, `box`, and AVF overlay behavior are unchanged.

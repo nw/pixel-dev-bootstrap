@@ -42,12 +42,15 @@ source ~/.bashrc
 dev-doctor
 ```
 
-Both environments use the same Android-shared bootstrap checkout:
+The bootstrap checkout lives on each environment's private filesystem:
 
 ```text
-Termux: ~/storage/shared/dev/pixel-dev-bootstrap
-AVF:    /mnt/shared/dev/pixel-dev-bootstrap
+Termux: ~/.local/share/pixel-dev-bootstrap/source
+AVF:    ~/.local/share/pixel-dev-bootstrap/source
 ```
+
+The paths look the same but are separate checkouts. Shared storage is created for
+`dev/` state only; Git metadata is intentionally kept off Android shared storage.
 
 The bootstrap installs the substrate only. Recipes, registry authentication,
 box images and project workloads remain explicit.
@@ -57,7 +60,6 @@ box images and project workloads remain explicit.
 ```text
 Android shared storage
 └── dev/
-    ├── pixel-dev-bootstrap/       upstream bootstrap checkout
     ├── configs/
     │   ├── repos.txt              repo URLs for reseed
     │   ├── registries.conf        box registry aliases
@@ -71,9 +73,13 @@ Android shared storage
     └── exports/                   explicit exports
 
 Termux private home
+├── ~/.local/share/pixel-dev-bootstrap/source
+│                                  disposable bootstrap checkout
 └── ~/src/                         Termux working trees
 
 AVF private home
+├── ~/.local/share/pixel-dev-bootstrap/source
+│                                  disposable bootstrap checkout
 └── /home/droid/
     ├── src/                       disposable AVF working trees
     ├── scratch/
@@ -87,19 +93,28 @@ Termux: $HOME/storage/shared/dev
 AVF:    /mnt/shared/dev
 ```
 
-### Optional personal Git control plane
+### Optional versioned personal control plane
 
-`/mnt/shared/dev` can itself be a tiny user-owned Git repository. Track durable
-intent such as `configs/` and `containers/`; normally ignore:
+Keep Git metadata on a normal private filesystem or remote, **not** directly under
+`/mnt/shared/dev`. Android shared storage is the materialized reset-resilient copy,
+not a Git working tree.
 
-```gitignore
-pixel-dev-bootstrap/
-artifacts/
-exports/
+A simple personal pattern is:
+
+```text
+private Git checkout / remote
+  configs/
+  containers/
+        |
+        | copy/sync non-secret reconstruction files
+        v
+/mnt/shared/dev/
+  configs/
+  containers/
 ```
 
-The remote repository or another external backup is canonical durability.
-Shared storage survives an AVF reset, not a lost or wiped phone.
+The remote repository or another external backup is canonical durability. Shared
+storage survives an AVF reset, not a lost or wiped phone.
 
 ## Fast paths
 
@@ -147,7 +162,7 @@ box info esp
 
 | Command | Purpose |
 | --- | --- |
-| `bootstrap.sh` | thin remote entrypoint; detects Termux/AVF, establishes shared checkout, then runs `install.sh` |
+| `bootstrap.sh` | thin remote entrypoint; detects Termux/AVF, creates shared `dev/`, maintains a private bootstrap checkout, then runs `install.sh` |
 | `bash install.sh [options]` | local installer |
 | `dev-doctor` | environment, storage, command, clipboard and AVF/Podman diagnostics |
 | `./doctor.sh` | checkout-local wrapper for `dev-doctor` |

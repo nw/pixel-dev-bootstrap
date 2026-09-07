@@ -52,8 +52,11 @@ TERMUX_VERSION=test PREFIX=/data/data/com.termux/files/usr \
   HOME="$remote_home" PATH="$remote_bin:$PATH" \
   REMOTE_INSTALL_LOG="$remote_log" \
   bash "$ROOT_DIR/bootstrap.sh" --no-upgrade >/dev/null
-test -d "$remote_shared/dev/pixel-dev-bootstrap/.git"
-test -f "$remote_shared/dev/pixel-dev-bootstrap/install.sh"
+remote_checkout="$remote_home/.local/share/pixel-dev-bootstrap/source"
+test -d "$remote_shared/dev"
+test ! -e "$remote_shared/dev/pixel-dev-bootstrap"
+test -d "$remote_checkout/.git"
+test -f "$remote_checkout/install.sh"
 grep -qx -- '--no-upgrade' "$remote_log"
 
 printf 'Testing Termux configuration install...\n'
